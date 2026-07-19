@@ -1,0 +1,20 @@
+server:
+  port: 8888
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: InterviewAgent
+  datasource:
+    url: jdbc:postgresql://192.168.100.104:5432/ai_agent_code
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  ai:
+    vectorstore:
+      pgvector:
+        index-type: hnsw
+        distance-type: cosine_distance
+  profiles:
+    active: local
