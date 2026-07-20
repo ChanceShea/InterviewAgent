@@ -3,6 +3,8 @@ package com.shea.agent.interviewagent.utils;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
+import com.shea.agent.interviewagent.exception.BusinessException;
+import com.shea.agent.interviewagent.exception.ErrorCode;
 
 /**
  * @author : Shea.
@@ -24,6 +26,8 @@ public class StateUtil {
     public static String getStringValue(OverAllState state,String key) {
         return state.value(key)
                 .map(String.class::cast)
-                .orElseThrow();
+                .orElseThrow(
+                        () -> new BusinessException(ErrorCode.PARAMS_ERROR,"状态键不存在：" + key)
+                );
     }
 }

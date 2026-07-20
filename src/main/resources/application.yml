@@ -16,5 +16,10 @@ spring:
       pgvector:
         index-type: hnsw
         distance-type: cosine_distance
+        initialize-schema: true
   profiles:
     active: local
+
+rag:
+  autoLoad: true
+  batchSize: 1

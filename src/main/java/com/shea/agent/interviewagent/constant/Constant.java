@@ -11,4 +11,6 @@ public interface Constant {
     String OUTPUT_INFO = "info";
 
     String CHAT_ID = "chatId";
+
+    String FILE_PATH_PREFIX = "tmp/";
 }
