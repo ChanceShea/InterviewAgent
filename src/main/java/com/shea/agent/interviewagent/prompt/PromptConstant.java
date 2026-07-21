@@ -17,4 +17,8 @@ public class PromptConstant {
     public static PromptTemplate getGenerateQuestionPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("generate-question.txt"));
     }
+
+    public static PromptTemplate getEnhanceUserPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("enhance-user-query.txt"));
+    }
 }

@@ -16,6 +16,12 @@ public interface Constant {
     String FLUX_ID = "fluxId";
 
     String QUESTIONS = "questions";
+
+    String INPUT_KEY = "input";
+
+    String MULTI_TURN_QUERY = "multi_turn_query";
+
+    String ENHANCED_QUERY = "enhanced_query";
     // endregion
 
     // region graph节点

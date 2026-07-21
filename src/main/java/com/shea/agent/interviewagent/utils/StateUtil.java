@@ -30,4 +30,10 @@ public class StateUtil {
                         () -> new BusinessException(ErrorCode.PARAMS_ERROR,"状态键不存在：" + key)
                 );
     }
+
+    public static String getStringValue(OverAllState state,String key,String defaultValue) {
+        return state.value(key)
+                .map(String.class::cast)
+                .orElse(defaultValue);
+    }
 }

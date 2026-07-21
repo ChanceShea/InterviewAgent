@@ -48,4 +48,13 @@ public class StreamLlmServiceImpl implements LlmService {
         .subscribeOn(Schedulers.boundedElastic())
         .flux();
     }
+
+    @Override
+    public Flux<ChatResponse> callUser(String user) {
+        return aiAgent.getChatClient()
+                .prompt()
+                .user(user)
+                .stream()
+                .chatResponse();
+    }
 }

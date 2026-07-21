@@ -12,4 +12,6 @@ public interface LlmService {
     Flux<ChatResponse> call(String system, String user);
 
     Flux<ChatResponse> call(String system, String user, Class<?> classType);
+
+    Flux<ChatResponse> callUser(String user);
 }
