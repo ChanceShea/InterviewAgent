@@ -10,8 +10,11 @@ public class PromptConstant {
 
     private PromptConstant() {}
 
-
     public static PromptTemplate getParseResumeInfoPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("parse-resume-info.txt"));
+    }
+
+    public static PromptTemplate getGenerateQuestionPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("generate-question.txt"));
     }
 }

@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -60,7 +60,7 @@ public class ParseResumeInfoNode implements NodeAction {
     }
 
     private List<Document> loadDocument(String filePath) {
-        Resource resource = new ClassPathResource(filePath);
+        Resource resource = new FileSystemResource(filePath);
         PagePdfDocumentReader reader = new PagePdfDocumentReader(resource);
         return reader.read();
     }

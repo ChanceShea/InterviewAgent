@@ -60,7 +60,7 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
     }
 
     private ChatClientRequest before(ChatClientRequest chatClientRequest) {
-        log.info("AI Request：{}",chatClientRequest.prompt());
+        log.debug("AI Request：{}",chatClientRequest.prompt());
         return chatClientRequest;
     }
 
