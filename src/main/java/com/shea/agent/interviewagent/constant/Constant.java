@@ -30,6 +30,8 @@ public interface Constant {
     String PARSE_RESUME_INFO_NODE = "parseResumeInfoNode";
 
     String GENERATE_QUESTION_NODE = "generateQuestionNode";
+
+    String ENHANCE_USER_QUERY_NODE = "enhanceUserQueryNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";

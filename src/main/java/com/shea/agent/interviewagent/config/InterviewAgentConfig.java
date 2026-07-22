@@ -3,8 +3,11 @@ package com.shea.agent.interviewagent.config;
 import com.alibaba.cloud.ai.graph.KeyStrategy;
 import com.alibaba.cloud.ai.graph.KeyStrategyFactory;
 import com.alibaba.cloud.ai.graph.StateGraph;
+import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.shea.agent.interviewagent.utils.NodeBeanUtil;
+import com.shea.agent.interviewagent.workflow.dispathcer.InputDispatcher;
+import com.shea.agent.interviewagent.workflow.node.EnhanceUserQueryNode;
 import com.shea.agent.interviewagent.workflow.node.GenerateQuestionNode;
 import com.shea.agent.interviewagent.workflow.node.ParseResumeInfoNode;
 import org.jetbrains.annotations.NotNull;
@@ -14,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.shea.agent.interviewagent.constant.Constant.*;
 
 /**
@@ -27,11 +31,16 @@ public class InterviewAgentConfig {
     public StateGraph interviewGraph(NodeBeanUtil nodeBeanUtil) throws GraphStateException {
         StateGraph stateGraph = getStateGraph();
         stateGraph.addNode(PARSE_RESUME_INFO_NODE,nodeBeanUtil.getAsyncNodeBean(ParseResumeInfoNode.class))
-                .addNode(GENERATE_QUESTION_NODE,nodeBeanUtil.getAsyncNodeBean(GenerateQuestionNode.class));
+                .addNode(GENERATE_QUESTION_NODE,nodeBeanUtil.getAsyncNodeBean(GenerateQuestionNode.class))
+                .addNode(ENHANCE_USER_QUERY_NODE,nodeBeanUtil.getAsyncNodeBean(EnhanceUserQueryNode.class));
 
-        stateGraph.addEdge(StateGraph.START, PARSE_RESUME_INFO_NODE)
+        stateGraph.addConditionalEdges(StateGraph.START, AsyncEdgeAction.edge_async(new InputDispatcher()),
+                Map.of(ENHANCE_USER_QUERY_NODE,ENHANCE_USER_QUERY_NODE,
+                        PARSE_RESUME_INFO_NODE,PARSE_RESUME_INFO_NODE,
+                        END,END))
                 .addEdge(PARSE_RESUME_INFO_NODE, GENERATE_QUESTION_NODE)
-                .addEdge(GENERATE_QUESTION_NODE, StateGraph.END);
+                .addEdge(GENERATE_QUESTION_NODE, END)
+                .addEdge(ENHANCE_USER_QUERY_NODE,END);
         return stateGraph;
     }
 
