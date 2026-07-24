@@ -52,8 +52,7 @@ public class StreamLlmServiceImpl implements LlmService {
     @Override
     public Flux<ChatResponse> callUser(String user) {
         return aiAgent.getChatClient()
-                .prompt()
-                .user(user)
+                .prompt(new Prompt(user))
                 .stream()
                 .chatResponse();
     }

@@ -1,5 +1,6 @@
 package com.shea.agent.interviewagent.prompt;
 
+import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.dto.QueryRewriteDTO;
 import org.springframework.ai.converter.BeanOutputConverter;
 
@@ -27,5 +28,15 @@ public class PromptHelper {
         BeanOutputConverter<QueryRewriteDTO> beanOutputConverter = new BeanOutputConverter<>(QueryRewriteDTO.class);
         params.put("format", beanOutputConverter.getFormat());
         return PromptConstant.getEnhanceUserPrompt().render(params);
+    }
+
+    public static String buildAnswerWithRagPrompt(String documents,String multiTurn,String enhancedQuery) {
+        Map<String,Object> params = new HashMap<>();
+        params.put("documents", documents);
+        params.put("multi_turn", multiTurn);
+        params.put("enhanced_query", enhancedQuery);
+        BeanOutputConverter<AnswerUserQueryDTO> beanOutputConverter = new BeanOutputConverter<>(AnswerUserQueryDTO.class);
+        params.put("format", beanOutputConverter.getFormat());
+        return PromptConstant.getAnswerWithRagPrompt().render(params);
     }
 }

@@ -22,6 +22,8 @@ public interface Constant {
     String MULTI_TURN_QUERY = "multi_turn_query";
 
     String ENHANCED_QUERY = "enhanced_query";
+
+    String ANSWER_WITH_RAG = "answer_with_rag";
     // endregion
 
     // region graph节点
@@ -32,6 +34,8 @@ public interface Constant {
     String GENERATE_QUESTION_NODE = "generateQuestionNode";
 
     String ENHANCE_USER_QUERY_NODE = "enhanceUserQueryNode";
+
+    String ANSWER_WITH_RAG_NODE = "answerWithRagNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";

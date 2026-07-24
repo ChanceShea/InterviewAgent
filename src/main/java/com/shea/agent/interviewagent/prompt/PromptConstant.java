@@ -21,4 +21,8 @@ public class PromptConstant {
     public static PromptTemplate getEnhanceUserPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("enhance-user-query.txt"));
     }
+
+    public static PromptTemplate getAnswerWithRagPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("answer-with-rag.txt"));
+    }
 }
