@@ -59,6 +59,8 @@ public class InterviewAgentConfig {
             strategies.put(QUESTIONS,KeyStrategy.REPLACE);
             strategies.put(FLUX_ID,KeyStrategy.REPLACE);
             strategies.put(ANSWER_WITH_RAG,KeyStrategy.REPLACE);
+            strategies.put(MULTI_TURN_QUERY,KeyStrategy.REPLACE);
+            strategies.put(ENHANCED_QUERY,KeyStrategy.REPLACE);
             return strategies;
         };
 

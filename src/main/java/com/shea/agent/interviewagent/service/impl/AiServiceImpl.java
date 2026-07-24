@@ -1,14 +1,17 @@
 package com.shea.agent.interviewagent.service.impl;
 
+import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.CompiledGraph;
 import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
+import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AiService;
 import com.shea.agent.interviewagent.utils.FileStorageUtil;
+import com.shea.agent.interviewagent.utils.JsonUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -16,6 +19,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,7 +57,7 @@ public class AiServiceImpl implements AiService {
                     .build();
             Map<String,Object> stateMap = new HashMap<>();
             stateMap.put(CHAT_ID,chatId);
-            if (!file.isEmpty()) {
+            if (file != null && !file.isEmpty()) {
                 filePath = FileStorageUtil.saveTempFile(file);
                 stateMap.put(INPUT_FILE, filePath);
             } else {
@@ -63,12 +67,9 @@ public class AiServiceImpl implements AiService {
                     .flatMap(content -> {
                         if (content instanceof StreamingOutput output) {
                             if (GENERATE_QUESTION_NODE.equals(output.node())) {
-                                Flux<ServerSentEvent<String>> flux = processGenerateQuestionNode(output);
-                                if (flux != null) return flux;
-                            }
-                            else if (ENHANCE_USER_QUERY_NODE.equals(output.node())) {
-                                Flux<ServerSentEvent<String>> flux = processEnhanceUserQueryNode(output);
-                                if (flux != null) return flux;
+                                return processGenerateQuestionNode(output);
+                            } else if (ANSWER_WITH_RAG_NODE.equals(output.node())) {
+                                return processAnswerWithRagNode(output);
                             }
                         }
                         return Flux.empty();
@@ -81,30 +82,57 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    @NotNull
-    private Flux<ServerSentEvent<String>> processEnhanceUserQueryNode(StreamingOutput output) {
+    private Flux<ServerSentEvent<String>> processAnswerWithRagNode(StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
-        if (flux != null) {
-            return flux.flatMap(resp -> {
-                if (resp.getOutput() == null) {
-                    return Flux.empty();
-                }
-                try {
-                    StreamingOutput streamingOutput = resp.getOutput().get();
-                    String res = handleResultStr(streamingOutput);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .data(res)
-                            .build());
-                } catch (Exception e) {
-                    log.error("增强Query失败", e);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .data("增强Query失败，请稍后再试")
-                            .build());
-                }
-            });
+        if (flux == null) {
+            return Flux.empty();
         }
-        return Flux.empty();
+        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
+        StringBuilder sb = new StringBuilder();
+        final String[] lastExtracted = {""};
+        flux.subscribe(resp -> {
+            if (resp.getOutput() == null) {
+                return;
+            }
+            try {
+                StreamingOutput streamingOutput = resp.getOutput().get();
+                String chunk = handleResultStr(streamingOutput);
+                if (chunk == null) return;
+                sb.append(chunk);
+                String fullText = sb.toString();
+                String currentAnswer = JsonUtil.extractField(fullText,"answer");
+                if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
+                    String delta = currentAnswer.substring(lastExtracted[0].length());
+                    if (!delta.isEmpty()) {
+                        sink.tryEmitNext(delta);
+                        lastExtracted[0] = currentAnswer;
+                    }
+                }
+            } catch (Exception e) {
+                sink.tryEmitError(e);
+            }
+        },err -> {
+            log.error("流式输出错误",err);
+            sink.tryEmitError(err);
+        },() -> {
+            log.info("流式输出完成");
+            sink.tryEmitComplete();
+        });
+        return sink.asFlux()
+                .map(content ->
+                        ServerSentEvent.<String>builder()
+                                .data(content)
+                                .build()
+                ).doOnCancel(() -> log.info("客户端断开连接"));
+    }
+
+    private String extractAnswer(String res) {
+        if (JSONUtil.isTypeJSON(res)) {
+            AnswerUserQueryDTO dto = JSONUtil.toBean(res, AnswerUserQueryDTO.class);
+            return dto.getAnswer();
+        }
+        return res;
     }
 
     @NotNull

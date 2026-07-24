@@ -23,3 +23,7 @@ spring:
 rag:
   autoLoad: true
   batchSize: 1
+
+logging:
+  level:
+    web: debug

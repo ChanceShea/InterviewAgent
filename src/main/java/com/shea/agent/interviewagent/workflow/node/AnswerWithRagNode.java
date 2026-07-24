@@ -11,7 +11,6 @@ import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AgentKnowledgeService;
 import com.shea.agent.interviewagent.service.LlmService;
-import com.shea.agent.interviewagent.utils.ChatResponseUtil;
 import com.shea.agent.interviewagent.utils.FluxUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import lombok.RequiredArgsConstructor;
@@ -62,8 +61,8 @@ public class AnswerWithRagNode implements NodeAction {
         Map<String,Object> resultMap = new HashMap<>();
         String fluxId = UUID.randomUUID().toString();
         Flux<GraphResponse<StreamingOutput>> generator = FluxUtil.createStreamingGenerator(this.getClass(), state, responseFlux,
-                Flux.just(ChatResponseUtil.createResponse("正在查询用户问题...")),
-                Flux.just(ChatResponseUtil.createPureResponse("查询完成")),
+                Flux.empty(),
+                Flux.empty(),
                 res -> {
                     AnswerUserQueryDTO answerUserQueryDTO = JSONUtil.toBean(res, AnswerUserQueryDTO.class);
                     resultMap.put(ANSWER_WITH_RAG, answerUserQueryDTO.getAnswer());

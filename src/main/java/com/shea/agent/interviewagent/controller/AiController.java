@@ -28,8 +28,8 @@ public class AiController {
 
     @PostMapping(value = "/chat",produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chat(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("input") String input,
+            @RequestParam(value = "file",required = false) MultipartFile file,
+            @RequestParam(value = "input",required = false) String input,
             @RequestParam("chatId") String chatId
     ) {
         return aiService.chat(file, input, chatId);
