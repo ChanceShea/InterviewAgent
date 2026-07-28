@@ -33,7 +33,7 @@ class GenerateQuestionNodeTest {
         state.registerKeyAndStrategy(CHAT_ID, (oldV, newV) -> newV);
         state.registerKeyAndStrategy(INPUT_FILE, (oldV, newV) -> newV);
         state.registerKeyAndStrategy(OUTPUT_INFO, (oldV, newV) -> newV);
-        state.registerKeyAndStrategy(QUESTIONS, (oldV, newV) -> newV);
+        state.registerKeyAndStrategy(QUESTION, (oldV, newV) -> newV);
         state.registerKeyAndStrategy(FLUX_ID, (oldV, newV) -> newV);
 
         Map<String, Object> input = new HashMap<>();

@@ -21,15 +21,23 @@ public class InputDispatcher implements EdgeAction {
     public String apply(OverAllState state) throws Exception {
         String filePath = StateUtil.getStringValue(state,INPUT_FILE,"");
         String userQuery = StateUtil.getStringValue(state,INPUT_KEY,"");
-        boolean hasQuery = StrUtil.isBlank(userQuery);
-        boolean hasFile = StrUtil.isBlank(filePath);
-        if (hasFile && hasQuery) {
-            log.info("用户未上传简历文件，且没有提问，结束");
-            return END;
-        }
-        if (!hasFile) {
+        String userReplyAnswer = StateUtil.getStringValue(state, USER_REPLY_ANSWER, "");
+        String currentPhase = StateUtil.getStringValue(state, CURRENT_PHASE, "general_chat");
+        if (StrUtil.isNotBlank(filePath)) {
             return PARSE_RESUME_INFO_NODE;
         }
-        return ENHANCE_USER_QUERY_NODE;
+        if (INTERVIEW_PHASE.equals(currentPhase)) {
+            if (StrUtil.isNotBlank(userReplyAnswer)) {
+                return EVALUATE_USER_QUERY_NODE;
+            }
+
+            if (StrUtil.isNotBlank(userQuery)) {
+                return ENHANCE_USER_QUERY_NODE;
+            }
+        }
+        if (StrUtil.isNotBlank(userQuery)) {
+            return ENHANCE_USER_QUERY_NODE;
+        }
+        return END;
     }
 }

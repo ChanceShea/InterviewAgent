@@ -25,4 +25,8 @@ public class PromptConstant {
     public static PromptTemplate getAnswerWithRagPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("answer-with-rag.txt"));
     }
+
+    public static PromptTemplate getEvaluateUserAnswerPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("evaluate-user-answer.txt"));
+    }
 }

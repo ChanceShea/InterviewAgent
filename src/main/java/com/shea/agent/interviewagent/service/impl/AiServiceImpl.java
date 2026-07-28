@@ -1,10 +1,9 @@
 package com.shea.agent.interviewagent.service.impl;
 
 import cn.hutool.json.JSONUtil;
-import com.alibaba.cloud.ai.graph.CompiledGraph;
-import com.alibaba.cloud.ai.graph.GraphResponse;
-import com.alibaba.cloud.ai.graph.RunnableConfig;
-import com.alibaba.cloud.ai.graph.StateGraph;
+import com.alibaba.cloud.ai.graph.*;
+import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
+import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
@@ -40,7 +39,13 @@ public class AiServiceImpl implements AiService {
     private final FluxRegistry registry;
 
     public AiServiceImpl(StateGraph interviewGraph, FluxRegistry registry) throws GraphStateException {
-        this.graph = interviewGraph.compile();
+        MemorySaver memorySaver = MemorySaver.builder().build();
+        CompileConfig compileConfig = CompileConfig.builder()
+                .saverConfig(SaverConfig.builder()
+                        .register(memorySaver)
+                        .build()
+                ).build();
+        this.graph = interviewGraph.compile(compileConfig);
         this.registry = registry;
     }
 
@@ -48,7 +53,8 @@ public class AiServiceImpl implements AiService {
     public Flux<ServerSentEvent<String>> chat(
             MultipartFile file,
             String input,
-            String chatId
+            String chatId,
+            String phase
     ) {
         String filePath;
         try {
@@ -59,6 +65,7 @@ public class AiServiceImpl implements AiService {
             stateMap.put(CHAT_ID,chatId);
             if (file != null && !file.isEmpty()) {
                 filePath = FileStorageUtil.saveTempFile(file);
+                stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
                 stateMap.put(INPUT_FILE, filePath);
             } else {
                 stateMap.put(INPUT_KEY,input);
@@ -82,6 +89,32 @@ public class AiServiceImpl implements AiService {
         }
     }
 
+    @Override
+    public Flux<ServerSentEvent<String>> evaluateAnswer(String chatId, String answer) {
+        RunnableConfig config = RunnableConfig.builder()
+                .threadId(chatId)
+                .build();
+        Map<String,Object> stateMap = new HashMap<>();
+        stateMap.put(CHAT_ID,chatId);
+        stateMap.put(USER_REPLY_ANSWER,answer);
+        return graph.stream(stateMap, config)
+                .flatMap(output -> {
+                    if (output instanceof StreamingOutput streamingOutput) {
+                        if (EVALUATE_USER_QUERY_NODE.equals(streamingOutput.node())) {
+                            return output.state()
+                                    .value(EVALUATIONS)
+                                    .map(evaluations -> ServerSentEvent.<String>builder()
+                                            .data(JSONUtil.toJsonStr(evaluations))
+                                            .build())
+                                    .map(Flux::just)
+                                    .orElseGet(Flux::empty);
+                        }
+                    }
+                    return Flux.empty();
+                });
+    }
+
+
     private Flux<ServerSentEvent<String>> processAnswerWithRagNode(StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
@@ -97,7 +130,7 @@ public class AiServiceImpl implements AiService {
             }
             try {
                 StreamingOutput streamingOutput = resp.getOutput().get();
-                String chunk = handleResultStr(streamingOutput);
+                String chunk = handleStreamStr(streamingOutput);
                 if (chunk == null) return;
                 sb.append(chunk);
                 String fullText = sb.toString();
@@ -127,6 +160,7 @@ public class AiServiceImpl implements AiService {
                 ).doOnCancel(() -> log.info("客户端断开连接"));
     }
 
+    @Deprecated
     private String extractAnswer(String res) {
         if (JSONUtil.isTypeJSON(res)) {
             AnswerUserQueryDTO dto = JSONUtil.toBean(res, AnswerUserQueryDTO.class);
@@ -136,7 +170,7 @@ public class AiServiceImpl implements AiService {
     }
 
     @NotNull
-    private static String handleResultStr(StreamingOutput streamingOutput) {
+    private static String handleStreamStr(StreamingOutput streamingOutput) {
         String resultStr = streamingOutput.getOriginData().toString();
         Pattern pattern = Pattern.compile("textContent=(.*?), metadata=", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(resultStr);
@@ -149,15 +183,32 @@ public class AiServiceImpl implements AiService {
     @NotNull
     private Flux<ServerSentEvent<String>> processGenerateQuestionNode(StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux != null) {
             return flux.flatMap(resp -> {
                 try {
                     if (resp.getOutput() == null) {
+                        resp.resultValue().ifPresent(value -> {
+                            if (value instanceof Map<?,?> map) {
+                                Map<String,Object> update = new HashMap<>();
+                                map.forEach((k,v) -> update.put(String.valueOf(k),v));
+                                try {
+                                    graph.updateState(
+                                            RunnableConfig.builder()
+                                                    .threadId(chatId)
+                                                    .build(),
+                                            update
+                                    );
+                                }catch (Exception e) {
+                                    log.error("写入checkpoint失败",e);
+                                }
+                            }
+                        });
                         return Flux.empty();
                     }
                     StreamingOutput streamingOutput = resp.getOutput().get();
-                    String res = handleResultStr(streamingOutput);
+                    String res = handleStreamStr(streamingOutput);
                     return Flux.just(ServerSentEvent.<String>builder()
                             .data(res)
                             .build());

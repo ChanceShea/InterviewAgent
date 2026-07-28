@@ -63,7 +63,7 @@ public class GenerateQuestionNode implements NodeAction {
                     String questionText = extractQuestion(r);
                     InterviewQuestion question = InterviewQuestion.fromRaw(questionText);
                     log.info("生成面试问题：{}", question);
-                    resultMap.put(QUESTIONS, question);
+                    resultMap.put(QUESTION, question);
                     return resultMap;
                 }
         );

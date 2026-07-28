@@ -1,7 +1,10 @@
 package com.shea.agent.interviewagent.prompt;
 
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.dto.QueryRewriteDTO;
+import com.shea.agent.interviewagent.entity.ResumeInfo;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 import java.util.HashMap;
@@ -38,5 +41,14 @@ public class PromptHelper {
         BeanOutputConverter<AnswerUserQueryDTO> beanOutputConverter = new BeanOutputConverter<>(AnswerUserQueryDTO.class);
         params.put("format", beanOutputConverter.getFormat());
         return PromptConstant.getAnswerWithRagPrompt().render(params);
+    }
+
+    public static String buildEvaluateUserAnswerPrompt(ResumeInfo info,String currentQuestion,String userAnswer,String multiTurn) {
+        JSONObject resume = JSONUtil.parseObj(info);
+        Map<String, Object> params = new HashMap<>(resume);
+        params.put("current_question", currentQuestion);
+        params.put("user_answer", userAnswer);
+        params.put("multi_turn", multiTurn);
+        return PromptConstant.getEvaluateUserAnswerPrompt().render(params);
     }
 }

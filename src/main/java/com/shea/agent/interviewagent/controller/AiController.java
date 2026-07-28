@@ -30,8 +30,9 @@ public class AiController {
     public Flux<ServerSentEvent<String>> chat(
             @RequestParam(value = "file",required = false) MultipartFile file,
             @RequestParam(value = "input",required = false) String input,
-            @RequestParam("chatId") String chatId
+            @RequestParam("chatId") String chatId,
+            @RequestParam("phase") String phase
     ) {
-        return aiService.chat(file, input, chatId);
+        return aiService.chat(file, input, chatId,phase);
     }
 }

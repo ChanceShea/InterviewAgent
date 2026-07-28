@@ -10,5 +10,7 @@ import reactor.core.publisher.Flux;
  */
 public interface AiService {
 
-    Flux<ServerSentEvent<String>> chat(MultipartFile file,String input,String chatId);
+    Flux<ServerSentEvent<String>> chat(MultipartFile file,String input,String chatId,String phase);
+
+    Flux<ServerSentEvent<String>> evaluateAnswer(String chatId, String answer);
 }

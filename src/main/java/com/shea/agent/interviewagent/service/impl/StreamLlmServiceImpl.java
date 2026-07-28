@@ -19,7 +19,8 @@ import reactor.core.scheduler.Schedulers;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class StreamLlmServiceImpl implements LlmService {
+public class StreamLlmServiceImpl implements
+        LlmService {
 
     private final AiAgent aiAgent;
 
@@ -55,5 +56,21 @@ public class StreamLlmServiceImpl implements LlmService {
                 .prompt(new Prompt(user))
                 .stream()
                 .chatResponse();
+    }
+
+    @Override
+    public Flux<ChatResponse> callUser(String user, Class<?> classType) {
+        StructuredOutputValidationAdvisor advisor = StructuredOutputValidationAdvisor.builder()
+                .outputType(classType)
+                .maxRepeatAttempts(2)
+                .build();
+        return Mono.fromCallable(() -> aiAgent.getChatClient()
+                .prompt(new Prompt())
+                .user(user)
+                .advisors(advisor)
+                .call()
+                .chatResponse())
+                .subscribeOn(Schedulers.boundedElastic())
+                .flux();
     }
 }

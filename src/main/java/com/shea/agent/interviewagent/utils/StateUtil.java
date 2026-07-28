@@ -1,10 +1,13 @@
 package com.shea.agent.interviewagent.utils;
 
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.shea.agent.interviewagent.exception.BusinessException;
 import com.shea.agent.interviewagent.exception.ErrorCode;
+
+import java.util.List;
 
 /**
  * @author : Shea.
@@ -35,5 +38,16 @@ public class StateUtil {
         return state.value(key)
                 .map(String.class::cast)
                 .orElse(defaultValue);
+    }
+
+    public static <T> List<T> getListValue(OverAllState state, String key, Class<T> elementType, List<T> defaultValue) {
+        return state.value(key)
+                .map(v -> {
+                    if (v instanceof String) {
+                        JSONArray jsonArray = JSONUtil.parseArray(v);
+                        return jsonArray.toList(elementType);
+                    }
+                    return (List<T>) v;
+                }).orElse(defaultValue);
     }
 }

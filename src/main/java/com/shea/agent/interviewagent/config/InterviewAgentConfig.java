@@ -7,10 +7,7 @@ import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.shea.agent.interviewagent.utils.NodeBeanUtil;
 import com.shea.agent.interviewagent.workflow.dispathcer.InputDispatcher;
-import com.shea.agent.interviewagent.workflow.node.AnswerWithRagNode;
-import com.shea.agent.interviewagent.workflow.node.EnhanceUserQueryNode;
-import com.shea.agent.interviewagent.workflow.node.GenerateQuestionNode;
-import com.shea.agent.interviewagent.workflow.node.ParseResumeInfoNode;
+import com.shea.agent.interviewagent.workflow.node.*;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,16 +32,19 @@ public class InterviewAgentConfig {
                 .addNode(PARSE_RESUME_INFO_NODE,nodeBeanUtil.getAsyncNodeBean(ParseResumeInfoNode.class))
                 .addNode(GENERATE_QUESTION_NODE,nodeBeanUtil.getAsyncNodeBean(GenerateQuestionNode.class))
                 .addNode(ENHANCE_USER_QUERY_NODE,nodeBeanUtil.getAsyncNodeBean(EnhanceUserQueryNode.class))
-                .addNode(ANSWER_WITH_RAG_NODE,nodeBeanUtil.getAsyncNodeBean(AnswerWithRagNode.class));
+                .addNode(ANSWER_WITH_RAG_NODE,nodeBeanUtil.getAsyncNodeBean(AnswerWithRagNode.class))
+                .addNode(EVALUATE_USER_QUERY_NODE,nodeBeanUtil.getAsyncNodeBean(EvaluateUserAnswerNode.class));
 
         stateGraph
                 .addConditionalEdges(StateGraph.START, AsyncEdgeAction.edge_async(new InputDispatcher()),
                 Map.of(ENHANCE_USER_QUERY_NODE,ENHANCE_USER_QUERY_NODE,
                         PARSE_RESUME_INFO_NODE,PARSE_RESUME_INFO_NODE,
+                        EVALUATE_USER_QUERY_NODE,EVALUATE_USER_QUERY_NODE,
                         END,END))
                 .addEdge(PARSE_RESUME_INFO_NODE, GENERATE_QUESTION_NODE)
-                .addEdge(ENHANCE_USER_QUERY_NODE,ANSWER_WITH_RAG_NODE)
                 .addEdge(GENERATE_QUESTION_NODE, END)
+                .addEdge(EVALUATE_USER_QUERY_NODE,END)
+                .addEdge(ENHANCE_USER_QUERY_NODE,ANSWER_WITH_RAG_NODE)
                 .addEdge(ANSWER_WITH_RAG_NODE,END);
         return stateGraph;
     }
@@ -56,11 +56,13 @@ public class InterviewAgentConfig {
             strategies.put(INPUT_FILE,KeyStrategy.REPLACE);
             strategies.put(OUTPUT_INFO,KeyStrategy.REPLACE);
             strategies.put(CHAT_ID,KeyStrategy.REPLACE);
-            strategies.put(QUESTIONS,KeyStrategy.REPLACE);
+            strategies.put(QUESTION,KeyStrategy.REPLACE);
             strategies.put(FLUX_ID,KeyStrategy.REPLACE);
             strategies.put(ANSWER_WITH_RAG,KeyStrategy.REPLACE);
             strategies.put(MULTI_TURN_QUERY,KeyStrategy.REPLACE);
             strategies.put(ENHANCED_QUERY,KeyStrategy.REPLACE);
+            strategies.put(USER_REPLY_ANSWER,KeyStrategy.REPLACE);
+            strategies.put(EVALUATIONS,KeyStrategy.REPLACE);
             return strategies;
         };
 

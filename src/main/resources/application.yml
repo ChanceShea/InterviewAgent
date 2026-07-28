@@ -19,6 +19,16 @@ spring:
         initialize-schema: true
   profiles:
     active: local
+  data:
+    redis:
+      host: 192.168.100.104
+      port: 6379
+      database: 0
+      password: xgw18720322169.
+      lettuce:
+        pool:
+          max-active: 8
+          min-idle: 0
 
 rag:
   autoLoad: true

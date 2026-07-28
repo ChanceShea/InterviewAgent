@@ -15,7 +15,7 @@ public interface Constant {
 
     String FLUX_ID = "fluxId";
 
-    String QUESTIONS = "questions";
+    String QUESTION = "questions";
 
     String INPUT_KEY = "input";
 
@@ -24,6 +24,12 @@ public interface Constant {
     String ENHANCED_QUERY = "enhanced_query";
 
     String ANSWER_WITH_RAG = "answer_with_rag";
+
+    String USER_REPLY_ANSWER = "user_reply_answer";
+
+    String EVALUATIONS = "evaluations";
+
+    String CURRENT_PHASE = "current_phase";
     // endregion
 
     // region graph节点
@@ -36,8 +42,11 @@ public interface Constant {
     String ENHANCE_USER_QUERY_NODE = "enhanceUserQueryNode";
 
     String ANSWER_WITH_RAG_NODE = "answerWithRagNode";
+
+    String EVALUATE_USER_QUERY_NODE = "evaluateUserQueryNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";
 
+    String INTERVIEW_PHASE = "interview";
 }
