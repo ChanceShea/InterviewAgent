@@ -44,7 +44,7 @@ public class AnswerWithRagNode implements NodeAction {
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
         String enhancedQuery = StateUtil.getStringValue(state, ENHANCED_QUERY);
-        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN_QUERY, "(无)");
+        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN, "(无)");
         String chatId = StateUtil.getStringValue(state, CHAT_ID);
         log.info("增强后查询：{}",enhancedQuery);
         AgentQueryDTO dto = AgentQueryDTO.builder()

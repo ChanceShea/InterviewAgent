@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -56,7 +57,6 @@ public class AiServiceImpl implements AiService {
             String chatId,
             String phase
     ) {
-        String filePath;
         try {
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(chatId)
@@ -64,9 +64,12 @@ public class AiServiceImpl implements AiService {
             Map<String,Object> stateMap = new HashMap<>();
             stateMap.put(CHAT_ID,chatId);
             if (file != null && !file.isEmpty()) {
-                filePath = FileStorageUtil.saveTempFile(file);
+                String filePath = FileStorageUtil.saveTempFile(file);
                 stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
                 stateMap.put(INPUT_FILE, filePath);
+            } else if (INTERVIEW_PHASE.equals(phase)) {
+                stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
+                stateMap.put(USER_REPLY_ANSWER,input);
             } else {
                 stateMap.put(INPUT_KEY,input);
             }
@@ -82,7 +85,7 @@ public class AiServiceImpl implements AiService {
                         return Flux.empty();
                     });
         }catch (Exception e){
-            log.error("解析简历失败：{}",e.getMessage(),e);
+            log.error("处理请求失败：{}",e.getMessage(),e);
             return Flux.just(ServerSentEvent.<String>builder()
                     .data("AI输出失败，请稍后再试")
                     .build());
@@ -114,6 +117,16 @@ public class AiServiceImpl implements AiService {
                 });
     }
 
+
+    private Flux<ServerSentEvent<String>> processEvaluateNode(StreamingOutput output) {
+        Object evaluations = output.state().value(EVALUATIONS).orElse(null);
+        if (evaluations != null) {
+            return Flux.just(ServerSentEvent.<String>builder()
+                    .data(JSONUtil.toJsonStr(evaluations))
+                    .build());
+        }
+        return Flux.empty();
+    }
 
     private Flux<ServerSentEvent<String>> processAnswerWithRagNode(StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
@@ -186,7 +199,8 @@ public class AiServiceImpl implements AiService {
         String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux != null) {
-            return flux.flatMap(resp -> {
+            return flux.publishOn(Schedulers.boundedElastic())
+                    .flatMap(resp -> {
                 try {
                     if (resp.getOutput() == null) {
                         resp.resultValue().ifPresent(value -> {

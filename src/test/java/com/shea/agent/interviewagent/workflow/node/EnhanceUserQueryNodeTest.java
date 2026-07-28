@@ -30,7 +30,7 @@ class EnhanceUserQueryNodeTest {
         state.registerKeyAndStrategy(CHAT_ID,new ReplaceStrategy());
         state.registerKeyAndStrategy(ENHANCED_QUERY,new ReplaceStrategy());
         state.registerKeyAndStrategy(FLUX_ID,new ReplaceStrategy());
-        state.registerKeyAndStrategy(MULTI_TURN_QUERY,new ReplaceStrategy());
+        state.registerKeyAndStrategy(MULTI_TURN,new ReplaceStrategy());
         return state;
     }
 
@@ -39,7 +39,7 @@ class EnhanceUserQueryNodeTest {
         OverAllState state = createTestState();
         Map<String, Object> inputKey = Map.of(
                 INPUT_KEY, "那它适用于什么场景",
-                MULTI_TURN_QUERY, "RedLock是什么",
+                MULTI_TURN, "RedLock是什么",
                 CHAT_ID, "11111"
         );
         state.updateState(inputKey);

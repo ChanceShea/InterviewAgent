@@ -33,7 +33,7 @@ public class EnhanceUserQueryNode implements NodeAction {
         String question = StateUtil.getStringValue(state, INPUT_KEY);
         String chatId = StateUtil.getStringValue(state, CHAT_ID);
         log.info("增强前问题：{}，chatId：{}", question,chatId);
-        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN_QUERY, "(无)");
+        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN, "(无)");
         String prompt = PromptHelper.buildEnhanceUserPrompt(multiTurn, question);
         StringBuilder sb = new StringBuilder();
         streamLlmServiceImpl.callUser(prompt)

@@ -32,7 +32,7 @@ class AnswerWithRagNodeTest {
 
         OverAllState state = new OverAllState();
         state.registerKeyAndStrategy(ENHANCED_QUERY,new ReplaceStrategy());
-        state.registerKeyAndStrategy(MULTI_TURN_QUERY,new ReplaceStrategy());
+        state.registerKeyAndStrategy(MULTI_TURN,new ReplaceStrategy());
         state.registerKeyAndStrategy(CHAT_ID,new ReplaceStrategy());
         state.registerKeyAndStrategy(FLUX_ID,new ReplaceStrategy());
         Map<String,Object> params = new HashMap<>();

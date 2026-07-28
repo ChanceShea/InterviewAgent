@@ -19,7 +19,7 @@ public interface Constant {
 
     String INPUT_KEY = "input";
 
-    String MULTI_TURN_QUERY = "multi_turn_query";
+    String MULTI_TURN = "multi_turn";
 
     String ENHANCED_QUERY = "enhanced_query";
 
@@ -30,6 +30,8 @@ public interface Constant {
     String EVALUATIONS = "evaluations";
 
     String CURRENT_PHASE = "current_phase";
+
+    String NEXT_STEP = "next_step";
     // endregion
 
     // region graph节点
@@ -44,9 +46,19 @@ public interface Constant {
     String ANSWER_WITH_RAG_NODE = "answerWithRagNode";
 
     String EVALUATE_USER_QUERY_NODE = "evaluateUserQueryNode";
+
+    String PLANNER_NODE = "plannerNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";
 
     String INTERVIEW_PHASE = "interview";
+
+    String GENERAL_QUERY_PHASE = "generalQuery";
+
+    String USER_MESSAGE = "USER";
+
+    String ASSISTANT_MESSAGE = "ASSISTANT";
+
+    String SYSTEM_MESSAGE = "SYSTEM";
 }

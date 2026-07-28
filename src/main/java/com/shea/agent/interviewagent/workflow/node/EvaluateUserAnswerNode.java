@@ -5,7 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
-import com.shea.agent.interviewagent.dto.InterviewQuestion;
+import com.shea.agent.interviewagent.entity.HistoryMessage;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.service.LlmService;
@@ -37,12 +37,11 @@ public class EvaluateUserAnswerNode implements NodeAction {
     public Map<String, Object> apply(OverAllState state) throws Exception {
         String userAnswer = StateUtil.getStringValue(state, USER_REPLY_ANSWER);
         ResumeInfo info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class, null);
-        InterviewQuestion interviewQuestion = StateUtil.getObjectValue(state, QUESTION, InterviewQuestion.class, null);
-        String questions = interviewQuestion.getQuestion();
-        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN_QUERY, "(无)");
+        String questions = StateUtil.getStringValue(state, QUESTION, "");
+        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN, "(无)");
         String chatId = StateUtil.getStringValue(state, CHAT_ID);
         List<AnswerEvaluation> evaluations = StateUtil.getListValue(state, EVALUATIONS, AnswerEvaluation.class, new ArrayList<>());
-        String prompt = PromptHelper.buildEvaluateUserAnswerPrompt(info, userAnswer, questions, multiTurn);
+        String prompt = PromptHelper.buildEvaluateUserAnswerPrompt(info, questions, userAnswer, multiTurn);
         log.info("构建好的prompt：\n {}",prompt);
         Flux<ChatResponse> flux = streamLlmService.callUser(prompt,AnswerEvaluation.class);
         AnswerEvaluation evaluation = flux.mapNotNull(resp -> resp.getResult().getOutput().getText())
@@ -52,9 +51,23 @@ public class EvaluateUserAnswerNode implements NodeAction {
                 .map(s -> JSONUtil.toBean(s, AnswerEvaluation.class))
                 .block();
         evaluations.add(evaluation);
+        List<HistoryMessage> histories;
+        if ("(无)".equals(multiTurn)) {
+            histories = new ArrayList<>();
+        } else {
+            histories = JSONUtil.toList(multiTurn, HistoryMessage.class);
+        }
+        HistoryMessage message = HistoryMessage.builder()
+                .chatId(chatId)
+                .messageType(USER_MESSAGE)
+                .message(userAnswer)
+                .build();
+        histories.add(message);
+        multiTurn = JSONUtil.toJsonStr(histories);
         return Map.of(
                 EVALUATIONS,evaluations,
-                CHAT_ID,chatId
+                CHAT_ID,chatId,
+                MULTI_TURN,multiTurn
         );
     }
 }

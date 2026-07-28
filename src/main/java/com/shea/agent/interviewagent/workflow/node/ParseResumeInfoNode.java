@@ -55,7 +55,8 @@ public class ParseResumeInfoNode implements NodeAction {
         log.info("成功解析简历：{}", info);
         return Map.of(
                 OUTPUT_INFO,info,
-                CHAT_ID,chatId
+                CHAT_ID,chatId,
+                INPUT_FILE,""
         );
     }
 

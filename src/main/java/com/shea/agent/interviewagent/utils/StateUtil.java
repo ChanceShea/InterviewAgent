@@ -15,6 +15,17 @@ import java.util.List;
  */
 public class StateUtil {
 
+    public static <T> T getObjectValue(OverAllState state,String key,Class<T> clazz) {
+        return state.value(key)
+                .map(v -> {
+                    if (v instanceof String) {
+                        JSONObject jsonObject = JSONUtil.parseObj(v);
+                        return JSONUtil.toBean(jsonObject, clazz);
+                    }
+                    return clazz.cast(v);
+                }).orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "状态键: " + key + " 不存在"));
+    }
+
     public static  <T> T getObjectValue(OverAllState state,String key,Class<T> clazz,T defaultValue) {
         return state.value(key)
                 .map(v -> {

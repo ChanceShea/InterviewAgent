@@ -1,13 +1,16 @@
 package com.shea.agent.interviewagent.prompt;
 
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.shea.agent.interviewagent.dto.AnswerEvaluation;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.dto.QueryRewriteDTO;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,8 +23,12 @@ public class PromptHelper {
         return PromptConstant.getParseResumeInfoPrompt().render();
     }
 
-    public static String buildGenerateQuestionPrompt(Map<String,Object> resumeInfo) {
-        return PromptConstant.getGenerateQuestionPrompt().render(resumeInfo);
+    public static String buildGenerateQuestionPrompt(ResumeInfo resumeInfo,String multiTurn) {
+        JSONObject resume = JSONUtil.parseObj(resumeInfo);
+        Map<String,Object> params = new HashMap<>(resume);
+        params.put("resumeInfo",resume);
+        params.put("multi_turn",multiTurn);
+        return PromptConstant.getGenerateQuestionPrompt().render(params);
     }
 
     public static String buildEnhanceUserPrompt(String multiTurn,String latestQuery) {
@@ -50,5 +57,14 @@ public class PromptHelper {
         params.put("user_answer", userAnswer);
         params.put("multi_turn", multiTurn);
         return PromptConstant.getEvaluateUserAnswerPrompt().render(params);
+    }
+
+    public static String buildInterviewPlannerPrompt(ResumeInfo info, List<AnswerEvaluation> answerEvaluations) {
+        JSONObject resume = JSONUtil.parseObj(info);
+        JSONArray evaluations = JSONUtil.parseArray(answerEvaluations);
+        Map<String, Object> params = new HashMap<>(resume);
+        params.put("evaluations", evaluations);
+        params.put("questionCount",evaluations.size());
+        return PromptConstant.getInterviewPlannerPrompt().render(params);
     }
 }

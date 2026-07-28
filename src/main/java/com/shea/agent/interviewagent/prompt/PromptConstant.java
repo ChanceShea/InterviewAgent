@@ -6,7 +6,7 @@ import org.springframework.ai.chat.prompt.PromptTemplate;
  * @author : Shea.
  * @since : 2026/7/19 17:52
  */
-public class PromptConstant {
+public final class PromptConstant {
 
     private PromptConstant() {}
 
@@ -28,5 +28,9 @@ public class PromptConstant {
 
     public static PromptTemplate getEvaluateUserAnswerPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("evaluate-user-answer.txt"));
+    }
+
+    public static PromptTemplate getInterviewPlannerPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("interview-planner.txt"));
     }
 }

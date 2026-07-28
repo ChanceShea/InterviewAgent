@@ -1,18 +1,16 @@
 package com.shea.agent.interviewagent.workflow.node;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
-import com.shea.agent.interviewagent.dto.InterviewQuestion;
+import com.shea.agent.interviewagent.entity.HistoryMessage;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.LlmService;
-import com.shea.agent.interviewagent.utils.ChatResponseUtil;
 import com.shea.agent.interviewagent.utils.FluxUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +19,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,22 +44,33 @@ public class GenerateQuestionNode implements NodeAction {
     public Map<String, Object> apply(OverAllState state) throws Exception {
         ResumeInfo info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class, null);
         String chatId = StateUtil.getStringValue(state, CHAT_ID);
-        JSONObject jsonObject = JSONUtil.parseObj(info);
-        String prompt = PromptHelper.buildGenerateQuestionPrompt(jsonObject);
+        String multiTurn = StateUtil.getStringValue(state, MULTI_TURN,"(无)");
+        String prompt = PromptHelper.buildGenerateQuestionPrompt(info,multiTurn);
         final Map<String, Object> resultMap = new HashMap<>();
         Flux<ChatResponse> response = streamLlmService
                 .call(prompt, "根据简历内容生成面试问题")
                 .doOnError(e -> log.error("生成面试问题失败，chatId={}", chatId,e));
         String fluxId = UUID.randomUUID().toString();
         Flux<GraphResponse<StreamingOutput>> generator = FluxUtil.createStreamingGenerator(
-                this.getClass(), state, response,
-                Flux.just(ChatResponseUtil.createResponse("正在生成面试问题")),
-                Flux.just(ChatResponseUtil.createPureResponse("\n面试问题生成完毕")),
+                this.getClass(), state, response, Flux.just(), Flux.just(),
                 r -> {
                     String questionText = extractQuestion(r);
-                    InterviewQuestion question = InterviewQuestion.fromRaw(questionText);
-                    log.info("生成面试问题：{}", question);
-                    resultMap.put(QUESTION, question);
+//                    InterviewQuestion question = InterviewQuestion.fromRaw(questionText);
+                    log.info("生成面试问题：{}", questionText);
+                    List<HistoryMessage> histories;
+                    if ("(无)".equals(multiTurn)) {
+                        histories = new ArrayList<>();
+                    } else {
+                        histories = JSONUtil.toList(multiTurn, HistoryMessage.class);
+                    }
+                    HistoryMessage message = HistoryMessage.builder()
+                            .chatId(chatId)
+                            .message(questionText)
+                            .messageType(ASSISTANT_MESSAGE)
+                            .build();
+                    histories.add(message);
+                    resultMap.put(QUESTION, questionText);
+                    resultMap.put(MULTI_TURN, JSONUtil.toJsonStr(histories));
                     return resultMap;
                 }
         );
