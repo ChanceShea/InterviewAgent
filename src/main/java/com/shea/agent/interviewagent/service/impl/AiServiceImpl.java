@@ -80,6 +80,8 @@ public class AiServiceImpl implements AiService {
                                 return processGenerateQuestionNode(output);
                             } else if (ANSWER_WITH_RAG_NODE.equals(output.node())) {
                                 return processAnswerWithRagNode(output);
+                            } else if (SUMMARIZE_INTERVIEW_NODE.equals(output.node())) {
+                                return processSummarizeInterviewNode(output);
                             }
                         }
                         return Flux.empty();
@@ -90,6 +92,53 @@ public class AiServiceImpl implements AiService {
                     .data("AI输出失败，请稍后再试")
                     .build());
         }
+    }
+
+    private Flux<ServerSentEvent<String>> processSummarizeInterviewNode(StreamingOutput output) {
+        String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
+        if (flux == null) {
+            return Flux.empty();
+        }
+        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
+        StringBuilder sb = new StringBuilder();
+        final String[] lastExtracted = {""};
+        flux.subscribe(resp -> {
+            if (resp.getOutput() == null) {
+                return;
+            }
+            try {
+                StreamingOutput streamingOutput = resp.getOutput().get();
+                String chunk = handleStreamStr(streamingOutput);
+                if (chunk == null) {
+                    return;
+                }
+                sb.append(chunk);
+                String fullText = sb.toString();
+                String currentAnswer = JsonUtil.extractField(fullText,"summary");
+                if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
+                    String delta = currentAnswer.substring(lastExtracted[0].length());
+                    if (!delta.isEmpty()) {
+                        sink.tryEmitNext(delta);
+                        lastExtracted[0] = currentAnswer;
+                    }
+                }
+            }catch (Exception e){
+                sink.tryEmitError(e);
+            }
+        },err -> {
+            log.error("流式输出出错，{}",err.getMessage());
+            sink.tryEmitError(err);
+        },() -> {
+            log.info("流式输出完成");
+            sink.tryEmitComplete();
+        });
+        return sink.asFlux()
+                .map(content ->
+                        ServerSentEvent.<String>builder()
+                                .data(content)
+                                .build()
+                ).doOnCancel(() -> log.info("客户端断开连接"));
     }
 
     @Override

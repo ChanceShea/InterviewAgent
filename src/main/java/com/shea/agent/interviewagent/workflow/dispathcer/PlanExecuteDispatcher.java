@@ -6,7 +6,6 @@ import com.shea.agent.interviewagent.utils.StateUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.shea.agent.interviewagent.constant.Constant.*;
 
 /**
@@ -25,6 +24,6 @@ public class PlanExecuteDispatcher implements EdgeAction {
             return GENERATE_QUESTION_NODE;
         }
         log.info("PlanExecuteDispatcher 决策: 跳转到 END (phase={})", phase);
-        return END;
+        return SUMMARIZE_INTERVIEW_NODE;
     }
 }

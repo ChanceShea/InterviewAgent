@@ -33,4 +33,8 @@ public final class PromptConstant {
     public static PromptTemplate getInterviewPlannerPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("interview-planner.txt"));
     }
+
+    public static PromptTemplate getSummarizeInterviewPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("summarize-interview.txt"));
+    }
 }

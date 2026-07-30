@@ -32,6 +32,8 @@ public interface Constant {
     String CURRENT_PHASE = "current_phase";
 
     String NEXT_STEP = "next_step";
+
+    String INTERVIEW_SUMMARY = "interview_summary";
     // endregion
 
     // region graph节点
@@ -48,6 +50,8 @@ public interface Constant {
     String EVALUATE_USER_QUERY_NODE = "evaluateUserQueryNode";
 
     String PLANNER_NODE = "plannerNode";
+
+    String SUMMARIZE_INTERVIEW_NODE = "summarizeInterviewNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";

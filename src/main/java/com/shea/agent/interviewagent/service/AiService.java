@@ -12,5 +12,6 @@ public interface AiService {
 
     Flux<ServerSentEvent<String>> chat(MultipartFile file,String input,String chatId,String phase);
 
+    @Deprecated
     Flux<ServerSentEvent<String>> evaluateAnswer(String chatId, String answer);
 }

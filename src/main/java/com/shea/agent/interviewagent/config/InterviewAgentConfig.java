@@ -35,7 +35,8 @@ public class InterviewAgentConfig {
                 .addNode(ENHANCE_USER_QUERY_NODE,nodeBeanUtil.getAsyncNodeBean(EnhanceUserQueryNode.class))
                 .addNode(ANSWER_WITH_RAG_NODE,nodeBeanUtil.getAsyncNodeBean(AnswerWithRagNode.class))
                 .addNode(EVALUATE_USER_QUERY_NODE,nodeBeanUtil.getAsyncNodeBean(EvaluateUserAnswerNode.class))
-                .addNode(PLANNER_NODE,nodeBeanUtil.getAsyncNodeBean(PlannerNode.class));
+                .addNode(PLANNER_NODE,nodeBeanUtil.getAsyncNodeBean(PlannerNode.class))
+                .addNode(SUMMARIZE_INTERVIEW_NODE,nodeBeanUtil.getAsyncNodeBean(SummarizeInterviewNode.class));
 
         stateGraph
                 .addConditionalEdges(StateGraph.START, AsyncEdgeAction.edge_async(new InputDispatcher()),
@@ -45,12 +46,13 @@ public class InterviewAgentConfig {
                         END,END))
                 .addConditionalEdges(PLANNER_NODE,AsyncEdgeAction.edge_async(new PlanExecuteDispatcher()),
                         Map.of(GENERATE_QUESTION_NODE,GENERATE_QUESTION_NODE,
-                                END,END))
+                                SUMMARIZE_INTERVIEW_NODE,SUMMARIZE_INTERVIEW_NODE))
                 .addEdge(PARSE_RESUME_INFO_NODE, GENERATE_QUESTION_NODE)
                 .addEdge(GENERATE_QUESTION_NODE, END)
                 .addEdge(EVALUATE_USER_QUERY_NODE, PLANNER_NODE)
                 .addEdge(ENHANCE_USER_QUERY_NODE,ANSWER_WITH_RAG_NODE)
-                .addEdge(ANSWER_WITH_RAG_NODE,END);
+                .addEdge(ANSWER_WITH_RAG_NODE,END)
+                .addEdge(SUMMARIZE_INTERVIEW_NODE,END);
         return stateGraph;
     }
 

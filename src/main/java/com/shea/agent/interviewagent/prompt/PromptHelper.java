@@ -67,4 +67,12 @@ public class PromptHelper {
         params.put("questionCount",evaluations.size());
         return PromptConstant.getInterviewPlannerPrompt().render(params);
     }
+
+    public static String buildSummarizeInterviewPrompt(ResumeInfo info,String answerEvaluations) {
+        JSONObject jsonObject = JSONUtil.parseObj(info);
+        JSONArray evaluations = JSONUtil.parseArray(answerEvaluations);
+        Map<String, Object> params = new HashMap<>(jsonObject);
+        params.put("evaluations", evaluations);
+        return PromptConstant.getSummarizeInterviewPrompt().render(params);
+    }
 }

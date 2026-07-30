@@ -71,7 +71,7 @@
 ## 输出格式（强制）
 
 **决策A：若触发结束条件（E0/E1/E2/E3），请严格按以下格式输出：**
-<verdict>END</verdict>
+<verdict>summarizeInterviewNode</verdict>
 
 **决策B：若未触发任何结束条件，请严格按以下格式输出：**
 <verdict>generateQuestionNode</verdict>
