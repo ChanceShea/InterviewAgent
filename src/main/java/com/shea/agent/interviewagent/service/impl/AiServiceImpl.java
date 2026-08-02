@@ -6,7 +6,9 @@ import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
+import com.shea.agent.interviewagent.context.JobMatchContext;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
+import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AiService;
 import com.shea.agent.interviewagent.utils.FileStorageUtil;
@@ -22,7 +24,9 @@ import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,9 +41,16 @@ import static com.shea.agent.interviewagent.constant.Constant.*;
 public class AiServiceImpl implements AiService {
 
     private final CompiledGraph graph;
+    private final CompiledGraph matchGraph;
     private final FluxRegistry registry;
+    private final JobMatchContext context;
 
-    public AiServiceImpl(StateGraph interviewGraph, FluxRegistry registry) throws GraphStateException {
+    public AiServiceImpl(
+            StateGraph interviewGraph,
+            StateGraph jobResumeMatchGraph,
+            FluxRegistry registry,
+            JobMatchContext context
+    ) throws GraphStateException {
         MemorySaver memorySaver = MemorySaver.builder().build();
         CompileConfig compileConfig = CompileConfig.builder()
                 .saverConfig(SaverConfig.builder()
@@ -47,7 +58,9 @@ public class AiServiceImpl implements AiService {
                         .build()
                 ).build();
         this.graph = interviewGraph.compile(compileConfig);
+        this.matchGraph = jobResumeMatchGraph.compile(compileConfig);
         this.registry = registry;
+        this.context = context;
     }
 
     @Override
@@ -153,28 +166,52 @@ public class AiServiceImpl implements AiService {
                 .flatMap(output -> {
                     if (output instanceof StreamingOutput streamingOutput) {
                         if (EVALUATE_USER_QUERY_NODE.equals(streamingOutput.node())) {
-                            return output.state()
-                                    .value(EVALUATIONS)
-                                    .map(evaluations -> ServerSentEvent.<String>builder()
-                                            .data(JSONUtil.toJsonStr(evaluations))
-                                            .build())
-                                    .map(Flux::just)
-                                    .orElseGet(Flux::empty);
+                            return processEvaluateNode(streamingOutput);
                         }
                     }
                     return Flux.empty();
                 });
     }
 
+    @Override
+    public JobResumeMatchDTO jdMatch(String chatId) {
+        RunnableConfig config = RunnableConfig.builder()
+                .threadId(chatId)
+                .build();
+        Map<String,Object> params = new HashMap<>();
+        String jd = context.get(JD_PREFIX + chatId);
+        String resumePath = context.get(RESUME_PREFIX + chatId);
+        params.put(JOB_DESCRIPTION, jd);
+        params.put(INPUT_FILE, resumePath);
+        params.put(CHAT_ID,chatId);
+        AtomicReference<JobResumeMatchDTO> dto = new AtomicReference<>();
+        matchGraph.stream(params, config)
+                .doOnNext(nodeOutput -> nodeOutput.state()
+                        .value(MATCH_RESULT)
+                        .ifPresent(result -> {
+                            log.info("匹配结果：{}", result);
+                            dto.set(JSONUtil.toBean(result.toString(), JobResumeMatchDTO.class));
+                        }))
+                .blockLast();
+        return dto.get();
+    }
+
 
     private Flux<ServerSentEvent<String>> processEvaluateNode(StreamingOutput output) {
-        Object evaluations = output.state().value(EVALUATIONS).orElse(null);
-        if (evaluations != null) {
-            return Flux.just(ServerSentEvent.<String>builder()
-                    .data(JSONUtil.toJsonStr(evaluations))
-                    .build());
-        }
-        return Flux.empty();
+        return output.state()
+                .value(EVALUATIONS)
+                .filter(evaluations -> {
+                    if (evaluations instanceof List<?> list && !list.isEmpty()) {
+                        return true;
+                    }
+                    log.warn("评估结果为空");
+                    return false;
+                })
+                .map(evaluations -> ServerSentEvent.<String>builder()
+                        .data(JSONUtil.toJsonStr(evaluations))
+                        .build())
+                .map(Flux::just)
+                .orElseGet(Flux::empty);
     }
 
     private Flux<ServerSentEvent<String>> processAnswerWithRagNode(StreamingOutput output) {

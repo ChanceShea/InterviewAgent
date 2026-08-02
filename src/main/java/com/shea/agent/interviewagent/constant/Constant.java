@@ -34,6 +34,11 @@ public interface Constant {
     String NEXT_STEP = "next_step";
 
     String INTERVIEW_SUMMARY = "interview_summary";
+
+    String JOB_DESCRIPTION = "job_description";
+
+    String MATCH_RESULT = "match_result";
+
     // endregion
 
     // region graph节点
@@ -52,6 +57,10 @@ public interface Constant {
     String PLANNER_NODE = "plannerNode";
 
     String SUMMARIZE_INTERVIEW_NODE = "summarizeInterviewNode";
+
+    String JOB_DESCRIPTION_SUMMARY_NODE = "jobDescriptionSummaryNode";
+
+    String JOB_RESUME_MATCH_NODE = "jobResumeMatchNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";
@@ -65,4 +74,8 @@ public interface Constant {
     String ASSISTANT_MESSAGE = "ASSISTANT";
 
     String SYSTEM_MESSAGE = "SYSTEM";
+
+    String JD_PREFIX = "Job-";
+
+    String RESUME_PREFIX = "Resume-";
 }

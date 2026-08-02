@@ -37,4 +37,12 @@ public final class PromptConstant {
     public static PromptTemplate getSummarizeInterviewPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("summarize-interview.txt"));
     }
+
+    public static PromptTemplate getJobDescriptionSummaryPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("job-description-summary.txt"));
+    }
+
+    public static PromptTemplate getJobResumeMatchPrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("job-resume-match.txt"));
+    }
 }

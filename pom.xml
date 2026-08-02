@@ -102,6 +102,12 @@
             <artifactId>redisson</artifactId>
             <version>3.22.0</version>
         </dependency>
+        <!--阿里云OCR图像识别-->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>alibabacloud-ocr_api20210707</artifactId>
+            <version>3.0.4</version>
+        </dependency>
     </dependencies>
 
     <build>

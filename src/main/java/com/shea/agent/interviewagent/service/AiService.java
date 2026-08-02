@@ -1,5 +1,6 @@
 package com.shea.agent.interviewagent.service;
 
+import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
@@ -14,4 +15,6 @@ public interface AiService {
 
     @Deprecated
     Flux<ServerSentEvent<String>> evaluateAnswer(String chatId, String answer);
+
+    JobResumeMatchDTO jdMatch(String chatId);
 }

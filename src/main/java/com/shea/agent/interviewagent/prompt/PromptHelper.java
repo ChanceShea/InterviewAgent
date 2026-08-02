@@ -75,4 +75,17 @@ public class PromptHelper {
         params.put("evaluations", evaluations);
         return PromptConstant.getSummarizeInterviewPrompt().render(params);
     }
+
+    public static String buildJobDescriptionSummaryPrompt(String content) {
+        Map<String,Object> params = new HashMap<>();
+        params.put("job_description", content);
+        return PromptConstant.getJobDescriptionSummaryPrompt().render(params);
+    }
+
+    public static String buildJobResumeMatchPrompt(String jobDescription,String resumeInfo) {
+        Map<String,Object> params = new HashMap<>();
+        params.put("job_description", jobDescription);
+        params.put("resume_info", resumeInfo);
+        return PromptConstant.getJobResumeMatchPrompt().render(params);
+    }
 }

@@ -1,14 +1,16 @@
 package com.shea.agent.interviewagent.controller;
 
+import cn.hutool.core.util.StrUtil;
+import com.shea.agent.interviewagent.common.Result;
+import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
+import com.shea.agent.interviewagent.exception.BusinessException;
+import com.shea.agent.interviewagent.exception.ErrorCode;
 import com.shea.agent.interviewagent.service.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 
@@ -22,7 +24,6 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class AiController {
 
-
     private final AiService aiService;
 
 
@@ -34,5 +35,13 @@ public class AiController {
             @RequestParam("phase") String phase
     ) {
         return aiService.chat(file, input, chatId,phase);
+    }
+
+    @GetMapping("/match")
+    public Result<JobResumeMatchDTO> jdMatch(@RequestParam String chatId) {
+        if (StrUtil.isBlank(chatId)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        return Result.success(aiService.jdMatch(chatId));
     }
 }
