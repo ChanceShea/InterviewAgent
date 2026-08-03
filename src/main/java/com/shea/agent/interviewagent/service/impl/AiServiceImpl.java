@@ -1,5 +1,6 @@
 package com.shea.agent.interviewagent.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
@@ -7,25 +8,34 @@ import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.context.JobMatchContext;
+import com.shea.agent.interviewagent.context.StreamContext;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
+import com.shea.agent.interviewagent.dto.GraphRequest;
 import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
+import com.shea.agent.interviewagent.exception.BusinessException;
+import com.shea.agent.interviewagent.exception.ErrorCode;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AiService;
 import com.shea.agent.interviewagent.utils.FileStorageUtil;
 import com.shea.agent.interviewagent.utils.JsonUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
+import com.shea.agent.interviewagent.vo.GraphNodeResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
-import reactor.core.scheduler.Schedulers;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,13 +53,16 @@ public class AiServiceImpl implements AiService {
     private final CompiledGraph graph;
     private final CompiledGraph matchGraph;
     private final FluxRegistry registry;
-    private final JobMatchContext context;
+    private final JobMatchContext jobContext;
+    private final Map<String, StreamContext> contextMap = new ConcurrentHashMap<>();
+    private final ExecutorService executor;
 
     public AiServiceImpl(
             StateGraph interviewGraph,
             StateGraph jobResumeMatchGraph,
             FluxRegistry registry,
-            JobMatchContext context
+            JobMatchContext context,
+            ExecutorService executorService
     ) throws GraphStateException {
         MemorySaver memorySaver = MemorySaver.builder().build();
         CompileConfig compileConfig = CompileConfig.builder()
@@ -60,60 +73,141 @@ public class AiServiceImpl implements AiService {
         this.graph = interviewGraph.compile(compileConfig);
         this.matchGraph = jobResumeMatchGraph.compile(compileConfig);
         this.registry = registry;
-        this.context = context;
+        this.jobContext = context;
+        this.executor = executorService;
     }
 
     @Override
-    public Flux<ServerSentEvent<String>> chat(
-            MultipartFile file,
-            String input,
-            String chatId,
-            String phase
+    public void chat(
+            Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink,
+            GraphRequest request
     ) {
         try {
+            String chatId = request.getChatId();
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(chatId)
                     .build();
-            Map<String,Object> stateMap = new HashMap<>();
-            stateMap.put(CHAT_ID,chatId);
-            if (file != null && !file.isEmpty()) {
-                String filePath = FileStorageUtil.saveTempFile(file);
-                stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
-                stateMap.put(INPUT_FILE, filePath);
-            } else if (INTERVIEW_PHASE.equals(phase)) {
-                stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
-                stateMap.put(USER_REPLY_ANSWER,input);
-            } else {
-                stateMap.put(INPUT_KEY,input);
-            }
-            return graph.stream(stateMap,config)
-                    .flatMap(content -> {
-                        if (content instanceof StreamingOutput output) {
-                            if (GENERATE_QUESTION_NODE.equals(output.node())) {
-                                return processGenerateQuestionNode(output);
-                            } else if (ANSWER_WITH_RAG_NODE.equals(output.node())) {
-                                return processAnswerWithRagNode(output);
-                            } else if (SUMMARIZE_INTERVIEW_NODE.equals(output.node())) {
-                                return processSummarizeInterviewNode(output);
-                            }
-                        }
-                        return Flux.empty();
-                    });
+            contextMap.computeIfAbsent(chatId,k -> new StreamContext());
+            StreamContext context = contextMap.get(chatId);
+            context.setSink(sink);
+            context.setChatId(chatId);
+            handleProcess(context,request, config);
         }catch (Exception e){
             log.error("处理请求失败：{}",e.getMessage(),e);
-            return Flux.just(ServerSentEvent.<String>builder()
-                    .data("AI输出失败，请稍后再试")
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.error(e.getMessage()))
                     .build());
         }
     }
 
-    private Flux<ServerSentEvent<String>> processSummarizeInterviewNode(StreamingOutput output) {
+    private void handleProcess(StreamContext context,GraphRequest request, RunnableConfig config) throws IOException {
+        if (context == null || context.getSink() == null) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "流式输出上下文不存在");
+        }
+        Map<String,Object> stateMap = new HashMap<>();
+        MultipartFile file = request.getFile();
+        String phase = request.getPhase();
+        String input = request.getQuery();
+        String chatId = request.getChatId();
+        if (file != null && !file.isEmpty()) {
+            String filePath = FileStorageUtil.saveTempFile(file);
+            stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
+            stateMap.put(INPUT_FILE, filePath);
+        } else if (INTERVIEW_PHASE.equals(phase)) {
+            stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
+            stateMap.put(USER_REPLY_ANSWER,input);
+        } else {
+            stateMap.put(INPUT_KEY,input);
+        }
+        stateMap.put(CHAT_ID,chatId);
+        Flux<NodeOutput> nodeOutputFlux = graph.stream(stateMap, config);
+        subscribeToFlux(context,nodeOutputFlux,request);
+    }
+
+    private void subscribeToFlux(StreamContext context, Flux<NodeOutput> nodeOutputFlux, GraphRequest request) {
+        CompletableFuture.runAsync(() -> {
+            Disposable disposable = nodeOutputFlux.subscribe(output -> handleOutput(request, output),
+                    err -> handleError(request, err), () -> handleComplete(request));
+            synchronized (context) {
+                if (context.isCleaned()) {
+                    // 如果已经清理，立即释放刚创建的 Disposable
+                    if (disposable != null && !disposable.isDisposed()) {
+                        disposable.dispose();
+                    }
+                }
+                else {
+                    // 只有在未清理的情况下才设置 Disposable
+                    context.setDisposable(disposable);
+                }
+            }
+        },executor);
+    }
+
+    private void handleComplete(GraphRequest request) {
+        String chatId = request.getChatId();
+        StreamContext context = contextMap.get(chatId);
+        int tokens = context.getTotalTokens().get();
+        log.info("流式输出结束，chatId:{},totalTokens:{}",chatId,tokens);
+        Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
+        if (sink != null && sink.currentSubscriberCount() > 0) {
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.done(tokens))
+                    .build());
+        }
+    }
+
+    private void handleError(GraphRequest request, Throwable err) {
+        String chatId = request.getChatId();
+        log.error("流式输出错误，chatId:{},err:{}",chatId,err.getMessage());
+        StreamContext context = contextMap.get(chatId);
+        Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
+        if (sink != null && sink.currentSubscriberCount() > 0) {
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.error(err.getMessage()))
+                    .build());
+            sink.tryEmitComplete();
+        }
+        context.cleanup();
+    }
+
+    private void handleOutput(GraphRequest request, NodeOutput output) {
+        String chatId = request.getChatId();
+        StreamContext context = contextMap.get(chatId);
+        if (context != null) {
+            output.state()
+                    .value(FINAL_ANSWER)
+                    .map(Object::toString)
+                    .filter(StrUtil::isNotBlank)
+                    .ifPresent(context::setFinalAnswer);
+        }
+        if (output instanceof StreamingOutput streamingOutput) {
+            handleStreamOutput(request,streamingOutput);
+        }
+    }
+
+    private void handleStreamOutput(GraphRequest request, StreamingOutput streamingOutput) {
+        String chatId = request.getChatId();
+        StreamContext context = contextMap.get(chatId);
+        if (context == null || context.getSink() == null) {
+            log.info("流式输出中止，chatId:{}",chatId);
+            return;
+        }
+        String node = streamingOutput.node();
+        Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
+
+        switch (node) {
+            case ANSWER_WITH_RAG_NODE -> processAnswerWithRagNode(sink,streamingOutput);
+            case SUMMARIZE_INTERVIEW_NODE -> processSummarizeInterviewNode(sink,streamingOutput);
+            case GENERATE_QUESTION_NODE -> processGenerateQuestionNode(sink,streamingOutput);
+        }
+    }
+
+    private void processSummarizeInterviewNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>>sink,StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux == null) {
-            return Flux.empty();
+            return;
         }
-        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
         StringBuilder sb = new StringBuilder();
         final String[] lastExtracted = {""};
         flux.subscribe(resp -> {
@@ -132,27 +226,124 @@ public class AiServiceImpl implements AiService {
                 if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
                     String delta = currentAnswer.substring(lastExtracted[0].length());
                     if (!delta.isEmpty()) {
-                        sink.tryEmitNext(delta);
+                        sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                                .data(GraphNodeResponse.token(delta))
+                                .build());
                         lastExtracted[0] = currentAnswer;
                     }
                 }
             }catch (Exception e){
-                sink.tryEmitError(e);
+                log.error("流式输出错误：",e);
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.error(e.getMessage()))
+                        .build());
             }
         },err -> {
             log.error("流式输出出错，{}",err.getMessage());
-            sink.tryEmitError(err);
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.error(err.getMessage()))
+                    .build());
+            sink.tryEmitComplete();
         },() -> {
             log.info("流式输出完成");
             sink.tryEmitComplete();
         });
-        return sink.asFlux()
-                .map(content ->
-                        ServerSentEvent.<String>builder()
-                                .data(content)
-                                .build()
-                ).doOnCancel(() -> log.info("客户端断开连接"));
     }
+
+    private void processAnswerWithRagNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink,StreamingOutput output) {
+        String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
+        if (flux == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        final String[] lastExtracted = {""};
+        flux.subscribe(resp -> {
+            if (resp.getOutput() == null) {
+                return;
+            }
+            try {
+                StreamingOutput streamingOutput = resp.getOutput().get();
+                String chunk = handleStreamStr(streamingOutput);
+                if (chunk == null) return;
+                sb.append(chunk);
+                String fullText = sb.toString();
+                String currentAnswer = JsonUtil.extractField(fullText,"answer");
+                if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
+                    String delta = currentAnswer.substring(lastExtracted[0].length());
+                    if (!delta.isEmpty()) {
+                        sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                                .data(GraphNodeResponse.token(delta))
+                                .build());
+                        lastExtracted[0] = currentAnswer;
+                    }
+                }
+            } catch (Exception e) {
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.error(e.getMessage()))
+                        .build());
+            }
+        },err -> {
+            log.error("流式输出错误",err);
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.error(err.getMessage()))
+                    .build());
+        },() -> {
+            log.info("流式输出完成");
+            sink.tryEmitComplete();
+        });
+    }
+
+    private void processGenerateQuestionNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>>sink,StreamingOutput output) {
+        String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
+        Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
+        if (flux != null) {
+            flux.subscribe(resp -> {
+                try {
+                    if (resp.getOutput() == null) {
+                        resp.resultValue().ifPresent(value -> {
+                            if (value instanceof Map<?,?> map) {
+                                Map<String,Object> update = new HashMap<>();
+                                map.forEach((k,v) -> update.put(String.valueOf(k),v));
+                                try {
+                                    graph.updateState(
+                                            RunnableConfig.builder()
+                                                    .threadId(chatId)
+                                                    .build(),
+                                            update
+                                    );
+                                }catch (Exception e) {
+                                    log.error("写入checkpoint失败",e);
+                                }
+                            }
+                        });
+                        return;
+                    }
+                    StreamingOutput streamingOutput = resp.getOutput().get();
+                    String res = handleStreamStr(streamingOutput);
+                    sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                            .data(GraphNodeResponse.token(res))
+                            .build());
+                } catch (Exception e) {
+                    log.error("处理流式响应失败", e);
+                    sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                            .data(GraphNodeResponse.error(e.getMessage()))
+                            .build());
+                }
+            },err -> {
+                log.error("处理流式响应失败", err);
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.error(err.getMessage()))
+                        .build());
+                sink.tryEmitComplete();
+            },() -> {
+                log.info("流式响应完成");
+                sink.tryEmitComplete();
+            });
+        }
+    }
+
 
     @Override
     public Flux<ServerSentEvent<String>> evaluateAnswer(String chatId, String answer) {
@@ -179,8 +370,8 @@ public class AiServiceImpl implements AiService {
                 .threadId(chatId)
                 .build();
         Map<String,Object> params = new HashMap<>();
-        String jd = context.get(JD_PREFIX + chatId);
-        String resumePath = context.get(RESUME_PREFIX + chatId);
+        String jd = jobContext.get(JD_PREFIX + chatId);
+        String resumePath = jobContext.get(RESUME_PREFIX + chatId);
         params.put(JOB_DESCRIPTION, jd);
         params.put(INPUT_FILE, resumePath);
         params.put(CHAT_ID,chatId);
@@ -194,6 +385,23 @@ public class AiServiceImpl implements AiService {
                         }))
                 .blockLast();
         return dto.get();
+    }
+
+    @Override
+    public void stopStreamProcessing(String chatId) {
+        StreamContext context = contextMap.get(chatId);
+        if (context != null) {
+            synchronized (context) {
+                Disposable disposable = context.getDisposable();
+                if (disposable != null && !disposable.isDisposed()) {
+                    disposable.dispose();
+                    log.info("已停止流式处理，chatId:{}", chatId);
+                }
+                context.cleanup();
+            }
+        } else {
+            log.warn("未找到流式处理上下文，chatId:{}", chatId);
+        }
     }
 
 
@@ -214,50 +422,6 @@ public class AiServiceImpl implements AiService {
                 .orElseGet(Flux::empty);
     }
 
-    private Flux<ServerSentEvent<String>> processAnswerWithRagNode(StreamingOutput output) {
-        String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
-        Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
-        if (flux == null) {
-            return Flux.empty();
-        }
-        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
-        StringBuilder sb = new StringBuilder();
-        final String[] lastExtracted = {""};
-        flux.subscribe(resp -> {
-            if (resp.getOutput() == null) {
-                return;
-            }
-            try {
-                StreamingOutput streamingOutput = resp.getOutput().get();
-                String chunk = handleStreamStr(streamingOutput);
-                if (chunk == null) return;
-                sb.append(chunk);
-                String fullText = sb.toString();
-                String currentAnswer = JsonUtil.extractField(fullText,"answer");
-                if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
-                    String delta = currentAnswer.substring(lastExtracted[0].length());
-                    if (!delta.isEmpty()) {
-                        sink.tryEmitNext(delta);
-                        lastExtracted[0] = currentAnswer;
-                    }
-                }
-            } catch (Exception e) {
-                sink.tryEmitError(e);
-            }
-        },err -> {
-            log.error("流式输出错误",err);
-            sink.tryEmitError(err);
-        },() -> {
-            log.info("流式输出完成");
-            sink.tryEmitComplete();
-        });
-        return sink.asFlux()
-                .map(content ->
-                        ServerSentEvent.<String>builder()
-                                .data(content)
-                                .build()
-                ).doOnCancel(() -> log.info("客户端断开连接"));
-    }
 
     @Deprecated
     private String extractAnswer(String res) {
@@ -279,47 +443,4 @@ public class AiServiceImpl implements AiService {
         return resultStr;
     }
 
-    @NotNull
-    private Flux<ServerSentEvent<String>> processGenerateQuestionNode(StreamingOutput output) {
-        String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
-        String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
-        Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
-        if (flux != null) {
-            return flux.publishOn(Schedulers.boundedElastic())
-                    .flatMap(resp -> {
-                try {
-                    if (resp.getOutput() == null) {
-                        resp.resultValue().ifPresent(value -> {
-                            if (value instanceof Map<?,?> map) {
-                                Map<String,Object> update = new HashMap<>();
-                                map.forEach((k,v) -> update.put(String.valueOf(k),v));
-                                try {
-                                    graph.updateState(
-                                            RunnableConfig.builder()
-                                                    .threadId(chatId)
-                                                    .build(),
-                                            update
-                                    );
-                                }catch (Exception e) {
-                                    log.error("写入checkpoint失败",e);
-                                }
-                            }
-                        });
-                        return Flux.empty();
-                    }
-                    StreamingOutput streamingOutput = resp.getOutput().get();
-                    String res = handleStreamStr(streamingOutput);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .data(res)
-                            .build());
-                } catch (Exception e) {
-                    log.error("处理流式响应失败", e);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .data("流式响应处理失败，请稍后再试")
-                            .build());
-                }
-            });
-        }
-        return Flux.empty();
-    }
 }

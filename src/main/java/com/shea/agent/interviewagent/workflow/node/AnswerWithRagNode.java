@@ -7,6 +7,7 @@ import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.dto.AgentQueryDTO;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
+import com.shea.agent.interviewagent.entity.HistoryMessage;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AgentKnowledgeService;
@@ -20,10 +21,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.shea.agent.interviewagent.constant.Constant.*;
@@ -52,6 +50,18 @@ public class AnswerWithRagNode implements NodeAction {
                 .threshold(0.5)
                 .topK(5)
                 .build();
+        List<HistoryMessage> histories;
+        if ("(无)".equals(multiTurn)) {
+            histories = new ArrayList<>();
+        } else {
+            histories = JSONUtil.toList(multiTurn, HistoryMessage.class);
+        }
+        HistoryMessage userMessage = HistoryMessage.builder()
+                .chatId(chatId)
+                .messageType(USER_MESSAGE)
+                .message(enhancedQuery)
+                .build();
+        histories.add(userMessage);
         List<Document> documents = agentKnowledgeService.queryDocuments(dto);
         String allDocuments = documents.stream()
                 .map(Document::getText)
@@ -65,7 +75,14 @@ public class AnswerWithRagNode implements NodeAction {
                 Flux.empty(),
                 res -> {
                     AnswerUserQueryDTO answerUserQueryDTO = JSONUtil.toBean(res, AnswerUserQueryDTO.class);
-                    resultMap.put(ANSWER_WITH_RAG, answerUserQueryDTO.getAnswer());
+                    HistoryMessage message = HistoryMessage.builder()
+                            .messageType(ASSISTANT_MESSAGE)
+                            .chatId(chatId)
+                            .message(answerUserQueryDTO.getAnswer())
+                            .build();
+                    histories.add(message);
+                    resultMap.put(FINAL_ANSWER, answerUserQueryDTO.getAnswer());
+                    resultMap.put(MULTI_TURN, JSONUtil.toJsonStr(histories));
                     log.info("相关文档：{}，相关度：{}",
                             answerUserQueryDTO.getCitations().toString(),
                             answerUserQueryDTO.getConfidence()

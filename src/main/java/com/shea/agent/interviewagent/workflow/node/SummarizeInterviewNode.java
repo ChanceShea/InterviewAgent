@@ -45,7 +45,7 @@ public class SummarizeInterviewNode implements NodeAction {
                 this.getClass(), state, flux,
                 Flux.empty(), Flux.empty(), r -> {
                     log.info("Summarize Interview Node输出结果:" + r);
-                    resultMap.put(INTERVIEW_SUMMARY, r);
+                    resultMap.put(FINAL_ANSWER, r);
                     return resultMap;
                 });
         String fluxId = UUID.randomUUID().toString();

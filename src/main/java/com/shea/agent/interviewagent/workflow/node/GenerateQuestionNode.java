@@ -15,6 +15,7 @@ import com.shea.agent.interviewagent.utils.FluxUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -53,30 +54,33 @@ public class GenerateQuestionNode implements NodeAction {
         String fluxId = UUID.randomUUID().toString();
         Flux<GraphResponse<StreamingOutput>> generator = FluxUtil.createStreamingGenerator(
                 this.getClass(), state, response, Flux.just(), Flux.just(),
-                r -> {
-                    String questionText = extractQuestion(r);
-//                    InterviewQuestion question = InterviewQuestion.fromRaw(questionText);
-                    log.info("生成面试问题：{}", questionText);
-                    List<HistoryMessage> histories;
-                    if ("(无)".equals(multiTurn)) {
-                        histories = new ArrayList<>();
-                    } else {
-                        histories = JSONUtil.toList(multiTurn, HistoryMessage.class);
-                    }
-                    HistoryMessage message = HistoryMessage.builder()
-                            .chatId(chatId)
-                            .message(questionText)
-                            .messageType(ASSISTANT_MESSAGE)
-                            .build();
-                    histories.add(message);
-                    resultMap.put(QUESTION, questionText);
-                    resultMap.put(MULTI_TURN, JSONUtil.toJsonStr(histories));
-                    return resultMap;
-                }
+                r -> getResultMap(r, multiTurn, chatId, resultMap)
         );
         registry.addFlux(fluxId,generator);
         resultMap.put(FLUX_ID, fluxId);
         resultMap.put(CHAT_ID, chatId);
+        return resultMap;
+    }
+
+    @NotNull
+    private Map<String, Object> getResultMap(String r, String multiTurn, String chatId, Map<String, Object> resultMap) {
+        String questionText = extractQuestion(r);
+//                    InterviewQuestion question = InterviewQuestion.fromRaw(questionText);
+        log.info("生成面试问题：{}", questionText);
+        List<HistoryMessage> histories;
+        if ("(无)".equals(multiTurn)) {
+            histories = new ArrayList<>();
+        } else {
+            histories = JSONUtil.toList(multiTurn, HistoryMessage.class);
+        }
+        HistoryMessage message = HistoryMessage.builder()
+                .chatId(chatId)
+                .message(questionText)
+                .messageType(ASSISTANT_MESSAGE)
+                .build();
+        histories.add(message);
+        resultMap.put(FINAL_ANSWER, questionText);
+        resultMap.put(MULTI_TURN, JSONUtil.toJsonStr(histories));
         return resultMap;
     }
 

@@ -39,6 +39,8 @@ public interface Constant {
 
     String MATCH_RESULT = "match_result";
 
+    String FINAL_ANSWER = "final_answer";
+
     // endregion
 
     // region graph节点
@@ -78,4 +80,8 @@ public interface Constant {
     String JD_PREFIX = "Job-";
 
     String RESUME_PREFIX = "Resume-";
+
+    String EVENT_COMPLETE = "complete";
+
+    String EVENT_ERROR = "error";
 }

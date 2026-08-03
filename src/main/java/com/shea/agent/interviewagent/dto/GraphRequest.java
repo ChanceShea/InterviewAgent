@@ -21,4 +21,6 @@ public class GraphRequest {
     private String query;
 
     private String chatId;
+
+    private String phase;
 }
