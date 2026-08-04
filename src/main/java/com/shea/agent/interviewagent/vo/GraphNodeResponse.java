@@ -26,6 +26,10 @@ public class GraphNodeResponse {
         return new GraphNodeResponse(EventType.THINKING,content);
     }
 
+    public static GraphNodeResponse resumeStage(String stage) {
+        return new GraphNodeResponse(EventType.RESUME_STAGE, stage);
+    }
+
     public static GraphNodeResponse done(int tokens) {
         return new GraphNodeResponse(EventType.DONE, "{\"totalTokens\":" + tokens + "}");
     }
@@ -33,5 +37,6 @@ public class GraphNodeResponse {
     public static GraphNodeResponse error(String errMessage) {
         return new GraphNodeResponse(EventType.ERROR, errMessage);
     }
+
 
 }

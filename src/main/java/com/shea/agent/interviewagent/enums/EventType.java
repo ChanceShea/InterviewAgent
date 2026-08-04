@@ -13,6 +13,7 @@ public enum EventType {
     TOKEN("token"),
     THINKING("thinking"),
     TOOL_CALL("tool_call"),
+    RESUME_STAGE("resume_stage"),
     DONE("done"),
     ERROR("error");
 

@@ -15,6 +15,7 @@ import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
 import com.shea.agent.interviewagent.exception.BusinessException;
 import com.shea.agent.interviewagent.exception.ErrorCode;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
+import com.shea.agent.interviewagent.registry.StreamContextRegistry;
 import com.shea.agent.interviewagent.service.AiService;
 import com.shea.agent.interviewagent.utils.FileStorageUtil;
 import com.shea.agent.interviewagent.utils.JsonUtil;
@@ -34,7 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -54,7 +54,7 @@ public class AiServiceImpl implements AiService {
     private final CompiledGraph matchGraph;
     private final FluxRegistry registry;
     private final JobMatchContext jobContext;
-    private final Map<String, StreamContext> contextMap = new ConcurrentHashMap<>();
+    private final StreamContextRegistry contextRegistry;
     private final ExecutorService executor;
 
     public AiServiceImpl(
@@ -62,6 +62,7 @@ public class AiServiceImpl implements AiService {
             StateGraph jobResumeMatchGraph,
             FluxRegistry registry,
             JobMatchContext context,
+            StreamContextRegistry contextRegistry,
             ExecutorService executorService
     ) throws GraphStateException {
         MemorySaver memorySaver = MemorySaver.builder().build();
@@ -74,6 +75,7 @@ public class AiServiceImpl implements AiService {
         this.matchGraph = jobResumeMatchGraph.compile(compileConfig);
         this.registry = registry;
         this.jobContext = context;
+        this.contextRegistry = contextRegistry;
         this.executor = executorService;
     }
 
@@ -87,8 +89,7 @@ public class AiServiceImpl implements AiService {
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(chatId)
                     .build();
-            contextMap.computeIfAbsent(chatId,k -> new StreamContext());
-            StreamContext context = contextMap.get(chatId);
+            StreamContext context = contextRegistry.getOrCreate(chatId);
             context.setSink(sink);
             context.setChatId(chatId);
             handleProcess(context,request, config);
@@ -145,7 +146,7 @@ public class AiServiceImpl implements AiService {
 
     private void handleComplete(GraphRequest request) {
         String chatId = request.getChatId();
-        StreamContext context = contextMap.get(chatId);
+        StreamContext context = contextRegistry.get(chatId);
         int tokens = context.getTotalTokens().get();
         log.info("流式输出结束，chatId:{},totalTokens:{}",chatId,tokens);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
@@ -159,7 +160,7 @@ public class AiServiceImpl implements AiService {
     private void handleError(GraphRequest request, Throwable err) {
         String chatId = request.getChatId();
         log.error("流式输出错误，chatId:{},err:{}",chatId,err.getMessage());
-        StreamContext context = contextMap.get(chatId);
+        StreamContext context = contextRegistry.get(chatId);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
         if (sink != null && sink.currentSubscriberCount() > 0) {
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
@@ -172,7 +173,7 @@ public class AiServiceImpl implements AiService {
 
     private void handleOutput(GraphRequest request, NodeOutput output) {
         String chatId = request.getChatId();
-        StreamContext context = contextMap.get(chatId);
+        StreamContext context = contextRegistry.get(chatId);
         if (context != null) {
             output.state()
                     .value(FINAL_ANSWER)
@@ -187,7 +188,7 @@ public class AiServiceImpl implements AiService {
 
     private void handleStreamOutput(GraphRequest request, StreamingOutput streamingOutput) {
         String chatId = request.getChatId();
-        StreamContext context = contextMap.get(chatId);
+        StreamContext context = contextRegistry.get(chatId);
         if (context == null || context.getSink() == null) {
             log.info("流式输出中止，chatId:{}",chatId);
             return;
@@ -196,6 +197,9 @@ public class AiServiceImpl implements AiService {
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
 
         switch (node) {
+            case PARSE_RESUME_INFO_NODE -> {
+                // 进度已由节点内部直接推送到 sink，此处无需额外处理
+            }
             case ANSWER_WITH_RAG_NODE -> processAnswerWithRagNode(sink,streamingOutput);
             case SUMMARIZE_INTERVIEW_NODE -> processSummarizeInterviewNode(sink,streamingOutput);
             case GENERATE_QUESTION_NODE -> processGenerateQuestionNode(sink,streamingOutput);
@@ -389,7 +393,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public void stopStreamProcessing(String chatId) {
-        StreamContext context = contextMap.get(chatId);
+        StreamContext context = contextRegistry.get(chatId);
         if (context != null) {
             synchronized (context) {
                 Disposable disposable = context.getDisposable();
