@@ -7,10 +7,11 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.StreamContextRegistry;
 import com.shea.agent.interviewagent.service.LlmService;
+import com.shea.agent.interviewagent.utils.FileStorageUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import com.shea.agent.interviewagent.vo.GraphNodeResponse;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
     private final LlmService streamLlmService;
     private final StreamContextRegistry contextRegistry;
-    private final Cache<String, ResumeInfo> LOCAL_CACHE = Caffeine.newBuilder()
+    private final Cache<String, ResumeInfoDTO> LOCAL_CACHE = Caffeine.newBuilder()
             .initialCapacity(1024)
             .maximumSize(10_000L) // 最大缓存数量
             .expireAfterWrite(Duration.ofMinutes(10)) // 缓存过期时间
@@ -79,7 +80,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
         // ---- 子阶段2：缓存查询 ----
         String md5Hash = DigestUtil.md5Hex(resumeText);
-        ResumeInfo info;
+        ResumeInfoDTO info;
         if ((info = LOCAL_CACHE.getIfPresent(md5Hash)) != null) {
             log.info("缓存命中，跳过解析：{}", info);
             emitStage(sink, "简历解析完成（缓存）");
@@ -88,7 +89,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
         // ---- 子阶段3：LLM解析（定时推送假进度） ----
         String prompt = PromptHelper.buildParseResumeInfoPrompt();
-        Flux<ChatResponse> response = streamLlmService.call(prompt, resumeText, ResumeInfo.class);
+        Flux<ChatResponse> response = streamLlmService.call(prompt, resumeText, ResumeInfoDTO.class);
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         AtomicBoolean running = new AtomicBoolean(true);
@@ -109,11 +110,12 @@ public class ParseResumeInfoNode implements NodeAction {
                     ).collect(StringBuilder::new, StringBuilder::append)
                     .map(StringBuilder::toString)
                     .filter(StrUtil::isNotBlank)
-                    .map(s -> JSONUtil.toBean(s, ResumeInfo.class))
+                    .map(s -> JSONUtil.toBean(s, ResumeInfoDTO.class))
                     .block();
         } finally {
             running.set(false);
             scheduler.shutdown();
+            FileStorageUtil.deleteTempFile(filePath);
         }
 
         log.info("成功解析简历：{}", info);
@@ -121,6 +123,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
         // ---- 子阶段4：完成 ----
         emitStage(sink, "简历解析完成");
+
         return Map.of(OUTPUT_INFO, info, CHAT_ID, chatId, INPUT_FILE, "");
     }
 

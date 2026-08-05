@@ -1,6 +1,5 @@
 package com.shea.agent.interviewagent.dto;
 
-import com.shea.agent.interviewagent.entity.ResumeInfo;
 import lombok.Data;
 
 import java.util.List;
@@ -13,7 +12,7 @@ import java.util.List;
 @Data
 public class InterviewContext {
 
-    private ResumeInfo info;
+    private ResumeInfoDTO info;
 
     private List<String> askedQuestions;
 

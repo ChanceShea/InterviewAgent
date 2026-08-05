@@ -6,8 +6,8 @@ import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.entity.HistoryMessage;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.LlmService;
@@ -43,7 +43,7 @@ public class GenerateQuestionNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        ResumeInfo info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class, null);
+        ResumeInfoDTO info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfoDTO.class, null);
         String chatId = StateUtil.getStringValue(state, CHAT_ID);
         String multiTurn = StateUtil.getStringValue(state, MULTI_TURN,"(无)");
         String prompt = PromptHelper.buildGenerateQuestionPrompt(info,multiTurn);

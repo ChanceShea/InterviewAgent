@@ -5,8 +5,8 @@ import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.entity.HistoryMessage;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.service.LlmService;
 import com.shea.agent.interviewagent.utils.StateUtil;
@@ -36,7 +36,7 @@ public class EvaluateUserAnswerNode implements NodeAction {
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
         String userAnswer = StateUtil.getStringValue(state, USER_REPLY_ANSWER);
-        ResumeInfo info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class, null);
+        ResumeInfoDTO info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfoDTO.class, null);
         String questions = StateUtil.getStringValue(state, QUESTION, "");
         String multiTurn = StateUtil.getStringValue(state, MULTI_TURN, "(无)");
         String chatId = StateUtil.getStringValue(state, CHAT_ID);

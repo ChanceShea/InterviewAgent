@@ -3,7 +3,7 @@ package com.shea.agent.interviewagent.workflow.node;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.LlmService;
@@ -33,7 +33,7 @@ public class JobResumeMatchNode implements NodeAction {
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
         String jd = StateUtil.getStringValue(state, JOB_DESCRIPTION);
-        ResumeInfo info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class);
+        ResumeInfoDTO info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfoDTO.class);
         String infoStr = JSONUtil.toJsonStr(info);
         String prompt = PromptHelper.buildJobResumeMatchPrompt(jd, infoStr);
         Flux<ChatResponse> flux = streamLlmServiceImpl.callUser(prompt);

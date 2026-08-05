@@ -6,7 +6,7 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.LlmService;
@@ -36,7 +36,7 @@ public class SummarizeInterviewNode implements NodeAction {
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
         List<AnswerEvaluation> evaluationList = StateUtil.getListValue(state, EVALUATIONS, AnswerEvaluation.class,new ArrayList<>());
-        ResumeInfo resumeInfo = StateUtil.getObjectValue(state, OUTPUT_INFO,ResumeInfo.class,null);
+        ResumeInfoDTO resumeInfo = StateUtil.getObjectValue(state, OUTPUT_INFO,ResumeInfoDTO.class,null);
         String evaluations = JSONUtil.toJsonStr(evaluationList);
         String prompt = PromptHelper.buildSummarizeInterviewPrompt(resumeInfo, evaluations);
         Flux<ChatResponse> flux = streamLlmServiceImpl.callUser(prompt);

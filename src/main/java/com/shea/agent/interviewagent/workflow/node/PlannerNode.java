@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.service.LlmService;
 import com.shea.agent.interviewagent.utils.StateUtil;
@@ -35,7 +35,7 @@ public class PlannerNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        ResumeInfo resumeInfo = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfo.class);
+        ResumeInfoDTO resumeInfo = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfoDTO.class);
         List<AnswerEvaluation> evaluations = StateUtil.getListValue(state, EVALUATIONS, AnswerEvaluation.class, new ArrayList<>());
         String prompt = PromptHelper.buildInterviewPlannerPrompt(resumeInfo, evaluations);
         Flux<ChatResponse> flux = streamLlmServiceImpl.callUser(prompt);

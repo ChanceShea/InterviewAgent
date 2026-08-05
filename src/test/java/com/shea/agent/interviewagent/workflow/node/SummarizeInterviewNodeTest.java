@@ -6,9 +6,8 @@ import com.alibaba.cloud.ai.graph.KeyStrategy;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
-import com.shea.agent.interviewagent.entity.Project;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
-import com.shea.agent.interviewagent.entity.WorkExperience;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
@@ -32,13 +31,13 @@ class SummarizeInterviewNodeTest {
 
     @Test
     void apply() {
-        List<WorkExperience> workExperiences = Arrays.asList(
-                WorkExperience.builder()
+        List<ResumeInfo.WorkExperience> workExperiences = Arrays.asList(
+                ResumeInfo.WorkExperience.builder()
                         .companyName("阿里巴巴集团")
                         .responsibilities("负责电商平台核心交易系统的开发与维护，优化系统性能，参与架构升级")
                         .duration("2020.03 - 2023.06")
                         .build(),
-                WorkExperience.builder()
+                ResumeInfo.WorkExperience.builder()
                         .companyName("腾讯科技有限公司")
                         .responsibilities("参与微信支付后端模块开发，负责高并发场景下的接口优化和问题排查")
                         .duration("2018.07 - 2020.02")
@@ -46,14 +45,14 @@ class SummarizeInterviewNodeTest {
         );
 
         // 构造项目列表
-        List<Project> projects = Arrays.asList(
-                Project.builder()
+        List<ResumeInfo.Project> projects = Arrays.asList(
+                ResumeInfo.Project.builder()
                         .projectName("双十一大促保障系统")
                         .duration("2021.09 - 2021.11")
                         .techStack(Arrays.asList("Spring Cloud", "Redis", "Kafka", "Docker"))
                         .description("负责设计并实现流量监控和弹性扩容模块，保障大促期间系统稳定运行，峰值QPS达到10万+")
                         .build(),
-                Project.builder()
+                ResumeInfo.Project.builder()
                         .projectName("智能客服机器人")
                         .duration("2022.01 - 2022.06")
                         .techStack(Arrays.asList("Python", "TensorFlow", "FastAPI", "MongoDB"))
@@ -62,12 +61,12 @@ class SummarizeInterviewNodeTest {
         );
 
         // 构造完整的ResumeInfo对象
-        ResumeInfo resumeInfo = ResumeInfo.builder()
+        ResumeInfoDTO resumeInfo = ResumeInfoDTO.builder()
                 .name("张明")
                 .job("高级Java开发工程师")
                 .skills(Arrays.asList("Java", "Spring Boot", "MySQL", "Redis", "Kafka", "Docker", "Kubernetes"))
-                .workExperiences(workExperiences)
-                .projects(projects)
+                .workExperience(workExperiences)
+                .project(projects)
                 .build();
         List<AnswerEvaluation> evaluationList = Arrays.asList(
                 createEvaluation1(),

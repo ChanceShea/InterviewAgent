@@ -37,6 +37,8 @@ public class AiController {
     public Flux<ServerSentEvent<GraphNodeResponse>> chat(
             @RequestParam(value = "file",required = false) MultipartFile file,
             @RequestParam(value = "input",required = false) String input,
+            @RequestParam(value = "approved",required = false) boolean approved,
+            @RequestParam(value = "feedbackContent",required = false) String feedbackContent,
             @RequestParam("chatId") String chatId,
             @RequestParam("phase") String phase
     ) {
@@ -45,6 +47,8 @@ public class AiController {
         request.setPhase(phase);
         request.setFile(file);
         request.setQuery(input);
+        request.setApproved(approved);
+        request.setHumanFeedbackContent(feedbackContent);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = Sinks.many().multicast().onBackpressureBuffer();
         aiService.chat(sink,request);
         return sink.asFlux().filter(sse -> {

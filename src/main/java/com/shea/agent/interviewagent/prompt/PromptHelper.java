@@ -6,7 +6,7 @@ import cn.hutool.json.JSONUtil;
 import com.shea.agent.interviewagent.dto.AnswerEvaluation;
 import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.dto.QueryRewriteDTO;
-import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 import java.util.HashMap;
@@ -23,7 +23,7 @@ public class PromptHelper {
         return PromptConstant.getParseResumeInfoPrompt().render();
     }
 
-    public static String buildGenerateQuestionPrompt(ResumeInfo resumeInfo,String multiTurn) {
+    public static String buildGenerateQuestionPrompt(ResumeInfoDTO resumeInfo, String multiTurn) {
         JSONObject resume = JSONUtil.parseObj(resumeInfo);
         Map<String,Object> params = new HashMap<>(resume);
         params.put("resumeInfo",resume);
@@ -50,7 +50,7 @@ public class PromptHelper {
         return PromptConstant.getAnswerWithRagPrompt().render(params);
     }
 
-    public static String buildEvaluateUserAnswerPrompt(ResumeInfo info,String currentQuestion,String userAnswer,String multiTurn) {
+    public static String buildEvaluateUserAnswerPrompt(ResumeInfoDTO info,String currentQuestion,String userAnswer,String multiTurn) {
         JSONObject resume = JSONUtil.parseObj(info);
         Map<String, Object> params = new HashMap<>(resume);
         params.put("current_question", currentQuestion);
@@ -59,7 +59,7 @@ public class PromptHelper {
         return PromptConstant.getEvaluateUserAnswerPrompt().render(params);
     }
 
-    public static String buildInterviewPlannerPrompt(ResumeInfo info, List<AnswerEvaluation> answerEvaluations) {
+    public static String buildInterviewPlannerPrompt(ResumeInfoDTO info, List<AnswerEvaluation> answerEvaluations) {
         JSONObject resume = JSONUtil.parseObj(info);
         JSONArray evaluations = JSONUtil.parseArray(answerEvaluations);
         Map<String, Object> params = new HashMap<>(resume);
@@ -68,7 +68,7 @@ public class PromptHelper {
         return PromptConstant.getInterviewPlannerPrompt().render(params);
     }
 
-    public static String buildSummarizeInterviewPrompt(ResumeInfo info,String answerEvaluations) {
+    public static String buildSummarizeInterviewPrompt(ResumeInfoDTO info,String answerEvaluations) {
         JSONObject jsonObject = JSONUtil.parseObj(info);
         JSONArray evaluations = JSONUtil.parseArray(answerEvaluations);
         Map<String, Object> params = new HashMap<>(jsonObject);

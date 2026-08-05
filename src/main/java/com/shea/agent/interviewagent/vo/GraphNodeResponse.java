@@ -38,5 +38,7 @@ public class GraphNodeResponse {
         return new GraphNodeResponse(EventType.ERROR, errMessage);
     }
 
-
+    public static GraphNodeResponse humanFeedback(String feedback) {
+        return new GraphNodeResponse(EventType.HUMAN_FEEDBACK_REQUIRED, feedback);
+    }
 }

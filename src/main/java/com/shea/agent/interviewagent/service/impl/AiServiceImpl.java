@@ -3,6 +3,7 @@ package com.shea.agent.interviewagent.service.impl;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.*;
+import com.alibaba.cloud.ai.graph.checkpoint.BaseCheckpointSaver;
 import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
@@ -56,6 +57,8 @@ public class AiServiceImpl implements AiService {
     private final JobMatchContext jobContext;
     private final StreamContextRegistry contextRegistry;
     private final ExecutorService executor;
+    private final CompileConfig compileConfig;
+    private final BaseCheckpointSaver checkpointSaver;
 
     public AiServiceImpl(
             StateGraph interviewGraph,
@@ -63,16 +66,20 @@ public class AiServiceImpl implements AiService {
             FluxRegistry registry,
             JobMatchContext context,
             StreamContextRegistry contextRegistry,
-            ExecutorService executorService
+            ExecutorService executorService,
+            CompileConfig compileConfig,
+            BaseCheckpointSaver checkpointSaver
     ) throws GraphStateException {
+        this.graph = interviewGraph.compile(compileConfig);
         MemorySaver memorySaver = MemorySaver.builder().build();
-        CompileConfig compileConfig = CompileConfig.builder()
+        CompileConfig config = CompileConfig.builder()
                 .saverConfig(SaverConfig.builder()
                         .register(memorySaver)
                         .build()
                 ).build();
-        this.graph = interviewGraph.compile(compileConfig);
-        this.matchGraph = jobResumeMatchGraph.compile(compileConfig);
+        this.matchGraph = jobResumeMatchGraph.compile(config);
+        this.checkpointSaver = checkpointSaver;
+        this.compileConfig = compileConfig;
         this.registry = registry;
         this.jobContext = context;
         this.contextRegistry = contextRegistry;
@@ -92,37 +99,52 @@ public class AiServiceImpl implements AiService {
             StreamContext context = contextRegistry.getOrCreate(chatId);
             context.setSink(sink);
             context.setChatId(chatId);
-            handleProcess(context,request, config);
-        }catch (Exception e){
-            log.error("处理请求失败：{}",e.getMessage(),e);
+            boolean resuming = StrUtil.isNotBlank(request.getHumanFeedbackContent());
+            if (resuming) {
+                handleHumanFeedback(request, config);
+            } else {
+                handleProcess(context, request, config);
+            }
+        } catch (Exception e) {
+            log.error("处理请求失败：{}", e.getMessage(), e);
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.error(e.getMessage()))
                     .build());
         }
     }
 
-    private void handleProcess(StreamContext context,GraphRequest request, RunnableConfig config) throws IOException {
+    private void handleHumanFeedback(GraphRequest request, RunnableConfig config) throws Exception {
+        Map<String, Object> stateUpdate = new HashMap<>();
+        stateUpdate.put(HUMAN_FEEDBACK_DATA, Map.of(
+                "approved", request.isApproved(),
+                "feedback_content", request.getHumanFeedbackContent()));
+        RunnableConfig updatedConfig = graph.updateState(config, stateUpdate);
+        Flux<NodeOutput> flux = graph.stream(null, updatedConfig);
+        subscribeToFlux(contextRegistry.get(request.getChatId()), flux, request);
+    }
+
+    private void handleProcess(StreamContext context, GraphRequest request, RunnableConfig config) throws IOException {
         if (context == null || context.getSink() == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "流式输出上下文不存在");
         }
-        Map<String,Object> stateMap = new HashMap<>();
+        Map<String, Object> stateMap = new HashMap<>();
         MultipartFile file = request.getFile();
         String phase = request.getPhase();
         String input = request.getQuery();
         String chatId = request.getChatId();
         if (file != null && !file.isEmpty()) {
             String filePath = FileStorageUtil.saveTempFile(file);
-            stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
+            stateMap.put(CURRENT_PHASE, INTERVIEW_PHASE);
             stateMap.put(INPUT_FILE, filePath);
         } else if (INTERVIEW_PHASE.equals(phase)) {
-            stateMap.put(CURRENT_PHASE,INTERVIEW_PHASE);
-            stateMap.put(USER_REPLY_ANSWER,input);
+            stateMap.put(CURRENT_PHASE, INTERVIEW_PHASE);
+            stateMap.put(USER_REPLY_ANSWER, input);
         } else {
-            stateMap.put(INPUT_KEY,input);
+            stateMap.put(INPUT_KEY, input);
         }
-        stateMap.put(CHAT_ID,chatId);
+        stateMap.put(CHAT_ID, chatId);
         Flux<NodeOutput> nodeOutputFlux = graph.stream(stateMap, config);
-        subscribeToFlux(context,nodeOutputFlux,request);
+        subscribeToFlux(context, nodeOutputFlux, request);
     }
 
     private void subscribeToFlux(StreamContext context, Flux<NodeOutput> nodeOutputFlux, GraphRequest request) {
@@ -135,31 +157,47 @@ public class AiServiceImpl implements AiService {
                     if (disposable != null && !disposable.isDisposed()) {
                         disposable.dispose();
                     }
-                }
-                else {
+                } else {
                     // 只有在未清理的情况下才设置 Disposable
                     context.setDisposable(disposable);
                 }
             }
-        },executor);
+        }, executor);
     }
 
     private void handleComplete(GraphRequest request) {
         String chatId = request.getChatId();
         StreamContext context = contextRegistry.get(chatId);
         int tokens = context.getTotalTokens().get();
-        log.info("流式输出结束，chatId:{},totalTokens:{}",chatId,tokens);
+        log.info("流式输出结束，chatId:{},totalTokens:{}", chatId, tokens);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
         if (sink != null && sink.currentSubscriberCount() > 0) {
+            if (isAwaitingHumanFeedback(chatId)) {
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.humanFeedback("是否将简历持久化到数据库"))
+                        .build());
+                return;
+            }
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.done(tokens))
                     .build());
         }
     }
 
+    private boolean isAwaitingHumanFeedback(String chatId) {
+        try {
+            return checkpointSaver.get(RunnableConfig.builder().threadId(chatId).build())
+                    .map(checkpoint -> HUMAN_FEEDBACK_NODE.equals(checkpoint.getNextNodeId()))
+                    .orElse(false);
+        } catch (Exception e) {
+            log.warn("查询 checkpoint 失败，chatId: {}", chatId, e);
+            return false;
+        }
+    }
+
     private void handleError(GraphRequest request, Throwable err) {
         String chatId = request.getChatId();
-        log.error("流式输出错误，chatId:{},err:{}",chatId,err.getMessage());
+        log.error("流式输出错误，chatId:{},err:{}", chatId, err.getMessage(),err);
         StreamContext context = contextRegistry.get(chatId);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
         if (sink != null && sink.currentSubscriberCount() > 0) {
@@ -182,7 +220,7 @@ public class AiServiceImpl implements AiService {
                     .ifPresent(context::setFinalAnswer);
         }
         if (output instanceof StreamingOutput streamingOutput) {
-            handleStreamOutput(request,streamingOutput);
+            handleStreamOutput(request, streamingOutput);
         }
     }
 
@@ -190,7 +228,7 @@ public class AiServiceImpl implements AiService {
         String chatId = request.getChatId();
         StreamContext context = contextRegistry.get(chatId);
         if (context == null || context.getSink() == null) {
-            log.info("流式输出中止，chatId:{}",chatId);
+            log.info("流式输出中止，chatId:{}", chatId);
             return;
         }
         String node = streamingOutput.node();
@@ -200,13 +238,13 @@ public class AiServiceImpl implements AiService {
             case PARSE_RESUME_INFO_NODE -> {
                 // 进度已由节点内部直接推送到 sink，此处无需额外处理
             }
-            case ANSWER_WITH_RAG_NODE -> processAnswerWithRagNode(sink,streamingOutput);
-            case SUMMARIZE_INTERVIEW_NODE -> processSummarizeInterviewNode(sink,streamingOutput);
-            case GENERATE_QUESTION_NODE -> processGenerateQuestionNode(sink,streamingOutput);
+            case ANSWER_WITH_RAG_NODE -> processAnswerWithRagNode(sink, streamingOutput);
+            case SUMMARIZE_INTERVIEW_NODE -> processSummarizeInterviewNode(sink, streamingOutput);
+            case GENERATE_QUESTION_NODE -> processGenerateQuestionNode(sink, streamingOutput);
         }
     }
 
-    private void processSummarizeInterviewNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>>sink,StreamingOutput output) {
+    private void processSummarizeInterviewNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux == null) {
@@ -226,7 +264,7 @@ public class AiServiceImpl implements AiService {
                 }
                 sb.append(chunk);
                 String fullText = sb.toString();
-                String currentAnswer = JsonUtil.extractField(fullText,"summary");
+                String currentAnswer = JsonUtil.extractField(fullText, "summary");
                 if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
                     String delta = currentAnswer.substring(lastExtracted[0].length());
                     if (!delta.isEmpty()) {
@@ -236,25 +274,25 @@ public class AiServiceImpl implements AiService {
                         lastExtracted[0] = currentAnswer;
                     }
                 }
-            }catch (Exception e){
-                log.error("流式输出错误：",e);
+            } catch (Exception e) {
+                log.error("流式输出错误：", e);
                 sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                         .data(GraphNodeResponse.error(e.getMessage()))
                         .build());
             }
-        },err -> {
-            log.error("流式输出出错，{}",err.getMessage());
+        }, err -> {
+            log.error("流式输出出错，{}", err.getMessage());
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.error(err.getMessage()))
                     .build());
             sink.tryEmitComplete();
-        },() -> {
+        }, () -> {
             log.info("流式输出完成");
             sink.tryEmitComplete();
         });
     }
 
-    private void processAnswerWithRagNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink,StreamingOutput output) {
+    private void processAnswerWithRagNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux == null) {
@@ -272,7 +310,7 @@ public class AiServiceImpl implements AiService {
                 if (chunk == null) return;
                 sb.append(chunk);
                 String fullText = sb.toString();
-                String currentAnswer = JsonUtil.extractField(fullText,"answer");
+                String currentAnswer = JsonUtil.extractField(fullText, "answer");
                 if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
                     String delta = currentAnswer.substring(lastExtracted[0].length());
                     if (!delta.isEmpty()) {
@@ -287,18 +325,18 @@ public class AiServiceImpl implements AiService {
                         .data(GraphNodeResponse.error(e.getMessage()))
                         .build());
             }
-        },err -> {
-            log.error("流式输出错误",err);
+        }, err -> {
+            log.error("流式输出错误", err);
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.error(err.getMessage()))
                     .build());
-        },() -> {
+        }, () -> {
             log.info("流式输出完成");
             sink.tryEmitComplete();
         });
     }
 
-    private void processGenerateQuestionNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>>sink,StreamingOutput output) {
+    private void processGenerateQuestionNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
         String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
@@ -307,9 +345,9 @@ public class AiServiceImpl implements AiService {
                 try {
                     if (resp.getOutput() == null) {
                         resp.resultValue().ifPresent(value -> {
-                            if (value instanceof Map<?,?> map) {
-                                Map<String,Object> update = new HashMap<>();
-                                map.forEach((k,v) -> update.put(String.valueOf(k),v));
+                            if (value instanceof Map<?, ?> map) {
+                                Map<String, Object> update = new HashMap<>();
+                                map.forEach((k, v) -> update.put(String.valueOf(k), v));
                                 try {
                                     graph.updateState(
                                             RunnableConfig.builder()
@@ -317,8 +355,8 @@ public class AiServiceImpl implements AiService {
                                                     .build(),
                                             update
                                     );
-                                }catch (Exception e) {
-                                    log.error("写入checkpoint失败",e);
+                                } catch (Exception e) {
+                                    log.error("写入checkpoint失败", e);
                                 }
                             }
                         });
@@ -335,13 +373,13 @@ public class AiServiceImpl implements AiService {
                             .data(GraphNodeResponse.error(e.getMessage()))
                             .build());
                 }
-            },err -> {
+            }, err -> {
                 log.error("处理流式响应失败", err);
                 sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                         .data(GraphNodeResponse.error(err.getMessage()))
                         .build());
                 sink.tryEmitComplete();
-            },() -> {
+            }, () -> {
                 log.info("流式响应完成");
                 sink.tryEmitComplete();
             });
@@ -354,9 +392,9 @@ public class AiServiceImpl implements AiService {
         RunnableConfig config = RunnableConfig.builder()
                 .threadId(chatId)
                 .build();
-        Map<String,Object> stateMap = new HashMap<>();
-        stateMap.put(CHAT_ID,chatId);
-        stateMap.put(USER_REPLY_ANSWER,answer);
+        Map<String, Object> stateMap = new HashMap<>();
+        stateMap.put(CHAT_ID, chatId);
+        stateMap.put(USER_REPLY_ANSWER, answer);
         return graph.stream(stateMap, config)
                 .flatMap(output -> {
                     if (output instanceof StreamingOutput streamingOutput) {
@@ -373,12 +411,12 @@ public class AiServiceImpl implements AiService {
         RunnableConfig config = RunnableConfig.builder()
                 .threadId(chatId)
                 .build();
-        Map<String,Object> params = new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
         String jd = jobContext.get(JD_PREFIX + chatId);
         String resumePath = jobContext.get(RESUME_PREFIX + chatId);
         params.put(JOB_DESCRIPTION, jd);
         params.put(INPUT_FILE, resumePath);
-        params.put(CHAT_ID,chatId);
+        params.put(CHAT_ID, chatId);
         AtomicReference<JobResumeMatchDTO> dto = new AtomicReference<>();
         matchGraph.stream(params, config)
                 .doOnNext(nodeOutput -> nodeOutput.state()

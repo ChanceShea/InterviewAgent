@@ -23,4 +23,8 @@ public class GraphRequest {
     private String chatId;
 
     private String phase;
+
+    private String humanFeedbackContent;
+
+    private boolean approved;
 }

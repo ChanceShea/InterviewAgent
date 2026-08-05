@@ -51,8 +51,7 @@ public class FileStorageUtil {
         return absolutePath;
     }
 
-    public static boolean deleteTempFile(String fileName) {
-        String filePath = FILE_DIR + File.separator + fileName;
+    public static boolean deleteTempFile(String filePath) {
         try {
             Path path = Paths.get(filePath);
             boolean deleted = Files.deleteIfExists(path);

@@ -30,10 +30,24 @@ spring:
           max-active: 8
           min-idle: 0
 
-rag:
-  autoLoad: true
-  batchSize: 1
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: is_deleted
+      logic-not-delete-value: 0
+      logic-delete-value: 1
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 logging:
   level:
     web: debug
+
+rag:
+  autoLoad: true
+  batchSize: 1
+
+interview-agent:
+  checkpoint:
+    type: memory

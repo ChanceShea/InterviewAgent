@@ -41,6 +41,12 @@ public interface Constant {
 
     String FINAL_ANSWER = "final_answer";
 
+    String HUMAN_FEEDBACK_DATA = "human_feedback_data";
+
+    String RESUME_SAVED = "resume_saved";
+
+    String WAIT_FOR_FEEDBACK = "wait_for_feedback";
+
     // endregion
 
     // region graph节点
@@ -63,6 +69,8 @@ public interface Constant {
     String JOB_DESCRIPTION_SUMMARY_NODE = "jobDescriptionSummaryNode";
 
     String JOB_RESUME_MATCH_NODE = "jobResumeMatchNode";
+
+    String HUMAN_FEEDBACK_NODE = "humanFeedbackNode";
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";

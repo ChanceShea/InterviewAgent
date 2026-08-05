@@ -1,25 +1,107 @@
 package com.shea.agent.interviewagent.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import lombok.*;
+import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
- * @author : Shea.
- * @since : 2026/7/19 17:21
+ * <p>
+ * 
+ * </p>
+ *
+ * @author Shea
+ * @since 2026-08-05
  */
 @Data
-@Builder
+@EqualsAndHashCode(callSuper = false)
+@Accessors(chain = true)
+@TableName(value = "resume_info", autoResultMap = true)
 @NoArgsConstructor
 @AllArgsConstructor
-public class ResumeInfo {
+public class ResumeInfo implements Serializable {
 
-    String name;
-    String job;
-    java.util.List<String> skills;
-    List<WorkExperience> workExperiences;
-    List<Project> projects;
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    private Long id;
+
+    /**
+     * 用户ID
+     */
+    private Long userId;
+
+    /**
+     * 求职者姓名
+     */
+    private String name;
+
+    /**
+     * 岗位名称
+     */
+    private String job;
+
+    /**
+     * 技能
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> skills;
+
+    /**
+     * 工作经历
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<WorkExperience> workExperience;
+
+    /**
+     * 项目经历
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<Project> project;
+
+    /**
+     * 创建时间
+     */
+    private LocalDate createTime;
+
+    /**
+     * 更新时间
+     */
+    private LocalDate updateTime;
+
+    /**
+     * 删除字段（0：未删除，1：删除）
+     */
+    private Integer isDeleted;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class WorkExperience {
+        private String companyName;
+        private String responsibilities;
+        private String duration;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Project {
+        private String projectName;
+        private String duration;
+        private List<String> techStack;
+        private String description;
+    }
 }
