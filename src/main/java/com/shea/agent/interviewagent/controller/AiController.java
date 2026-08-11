@@ -1,5 +1,7 @@
 package com.shea.agent.interviewagent.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.StrUtil;
 import com.shea.agent.interviewagent.common.Result;
 import com.shea.agent.interviewagent.dto.GraphRequest;
@@ -28,10 +30,10 @@ import static com.shea.agent.interviewagent.constant.Constant.EVENT_ERROR;
 @RequestMapping("/ai")
 @Slf4j
 @RequiredArgsConstructor
+@SaCheckLogin
 public class AiController {
 
     private final AiService aiService;
-
 
     @PostMapping(value = "/chat",produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<GraphNodeResponse>> chat(
@@ -49,6 +51,8 @@ public class AiController {
         request.setQuery(input);
         request.setApproved(approved);
         request.setHumanFeedbackContent(feedbackContent);
+        // 在 HTTP 线程中提取 userId，此时 Sa-Token 上下文有效
+        request.setUserId(StpUtil.getLoginIdAsString());
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = Sinks.many().multicast().onBackpressureBuffer();
         aiService.chat(sink,request);
         return sink.asFlux().filter(sse -> {

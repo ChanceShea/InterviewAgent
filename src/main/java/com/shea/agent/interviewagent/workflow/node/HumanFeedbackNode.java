@@ -37,7 +37,8 @@ public class HumanFeedbackNode implements NodeAction {
         boolean saved = false;
         if (approved) {
             ResumeInfoDTO info = StateUtil.getObjectValue(state, OUTPUT_INFO, ResumeInfoDTO.class);
-            saved = resumeInfoService.saveResume(info);
+            Long userId = StateUtil.getLongValue(state, USER_ID);
+            saved = resumeInfoService.saveResume(info,userId);
             log.info("用户同意持久化简历，保存结果：{}",saved);
         } else {
             log.info("用户拒绝持久化简历");

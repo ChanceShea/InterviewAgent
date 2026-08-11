@@ -27,4 +27,6 @@ public class GraphRequest {
     private String humanFeedbackContent;
 
     private boolean approved;
+
+    private String userId;
 }

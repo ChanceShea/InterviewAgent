@@ -1,5 +1,6 @@
 package com.shea.agent.interviewagent.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.shea.agent.interviewagent.common.Result;
@@ -21,6 +22,7 @@ import static com.shea.agent.interviewagent.constant.Constant.JD_PREFIX;
 @RestController
 @RequestMapping("/upload")
 @RequiredArgsConstructor
+@SaCheckLogin
 public class JobController {
 
     private final RecognizeGeneralUtil recognizeGeneralUtil;

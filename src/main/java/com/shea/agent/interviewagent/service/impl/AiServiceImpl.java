@@ -143,6 +143,7 @@ public class AiServiceImpl implements AiService {
             stateMap.put(INPUT_KEY, input);
         }
         stateMap.put(CHAT_ID, chatId);
+        stateMap.put(USER_ID, request.getUserId());
         Flux<NodeOutput> nodeOutputFlux = graph.stream(stateMap, config);
         subscribeToFlux(context, nodeOutputFlux, request);
     }
