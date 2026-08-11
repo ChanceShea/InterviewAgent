@@ -84,6 +84,7 @@ public class ParseResumeInfoNode implements NodeAction {
         if ((info = LOCAL_CACHE.getIfPresent(md5Hash)) != null) {
             log.info("缓存命中，跳过解析：{}", info);
             emitStage(sink, "简历解析完成（缓存）");
+            emitHumanFeedback(sink, "是否将简历持久化到数据库");
             return Map.of(OUTPUT_INFO, info, CHAT_ID, chatId, INPUT_FILE, "");
         }
 
@@ -123,6 +124,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
         // ---- 子阶段4：完成 ----
         emitStage(sink, "简历解析完成");
+        emitHumanFeedback(sink, "是否将简历持久化到数据库");
 
         return Map.of(OUTPUT_INFO, info, CHAT_ID, chatId, INPUT_FILE, "");
     }
@@ -131,6 +133,14 @@ public class ParseResumeInfoNode implements NodeAction {
         if (sink != null) {
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.think(stage))
+                    .build());
+        }
+    }
+
+    private void emitHumanFeedback(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, String message) {
+        if (sink != null) {
+            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                    .data(GraphNodeResponse.humanFeedback(message))
                     .build());
         }
     }

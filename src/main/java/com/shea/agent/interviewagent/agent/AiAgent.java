@@ -3,6 +3,7 @@ package com.shea.agent.interviewagent.agent;
 import com.shea.agent.interviewagent.advisor.MyLoggerAdvisor;
 import lombok.Getter;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,6 +19,9 @@ public class AiAgent {
     public AiAgent(ChatClient.Builder builder) {
         this.chatClient = builder
                 .defaultAdvisors(new MyLoggerAdvisor())
+                .defaultOptions(ChatOptions.builder()
+                        .temperature(0.5)
+                        .build())
                 .build();
     }
 }

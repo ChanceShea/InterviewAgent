@@ -3,6 +3,9 @@ package com.shea.agent.interviewagent.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.vo.ResumeInfoVO;
+
+import java.util.List;
 
 /**
  * <p>
@@ -14,5 +17,7 @@ import com.shea.agent.interviewagent.entity.ResumeInfo;
  */
 public interface IResumeInfoService extends IService<ResumeInfo> {
 
-    Boolean saveResume(ResumeInfoDTO dto);
+    Boolean saveResume(ResumeInfoDTO dto, Long userId);
+
+    List<ResumeInfoVO> listResumeInfo(Long userId);
 }

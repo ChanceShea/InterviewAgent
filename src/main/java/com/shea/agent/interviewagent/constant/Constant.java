@@ -47,6 +47,12 @@ public interface Constant {
 
     String WAIT_FOR_FEEDBACK = "wait_for_feedback";
 
+    String EXISTING_RESUME= "existing_resume";
+
+    String RESUME_REUSE_DECISION = "resume_reuse_decision";
+
+    String USER_ID = "userId";
+
     // endregion
 
     // region graph节点
@@ -71,6 +77,9 @@ public interface Constant {
     String JOB_RESUME_MATCH_NODE = "jobResumeMatchNode";
 
     String HUMAN_FEEDBACK_NODE = "humanFeedbackNode";
+
+    String CHECK_RESUME_NODE = "checkResumeNode";
+
     // endregion
 
     String FILE_PATH_PREFIX = "tmp/";

@@ -86,6 +86,7 @@ public class InterviewAgentConfig {
             strategies.put(INPUT_KEY,KeyStrategy.REPLACE);
             strategies.put(HUMAN_FEEDBACK_DATA,KeyStrategy.REPLACE);
             strategies.put(RESUME_SAVED,KeyStrategy.REPLACE);
+            strategies.put(USER_ID,KeyStrategy.REPLACE);
             return strategies;
         };
 

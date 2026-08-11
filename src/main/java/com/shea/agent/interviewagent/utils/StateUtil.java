@@ -51,6 +51,16 @@ public class StateUtil {
                 .orElse(defaultValue);
     }
 
+    public static Long getLongValue(OverAllState state, String key) {
+        return state.value(key)
+                .map(v -> {
+                    if (v instanceof Long l) return l;
+                    if (v instanceof Number n) return n.longValue();
+                    return Long.parseLong(v.toString());
+                })
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "状态键不存在：" + key));
+    }
+
     public static <T> List<T> getListValue(OverAllState state, String key, Class<T> elementType, List<T> defaultValue) {
         return state.value(key)
                 .map(v -> {
