@@ -51,6 +51,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         StpUtil.login(user.getId());
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user,vo);
+        StpUtil.getSession().set("user_" + user.getId(),user.getUuid());
         SaTokenInfo tokenInfo = StpUtil.getTokenInfo();
         String token = tokenInfo.getTokenValue();
         vo.setToken(token);

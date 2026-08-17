@@ -6,9 +6,11 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
 import com.shea.agent.interviewagent.entity.ResumeInfo;
+import com.shea.agent.interviewagent.exception.BusinessException;
 import com.shea.agent.interviewagent.mapper.ResumeInfoMapper;
 import com.shea.agent.interviewagent.service.IResumeInfoService;
 import com.shea.agent.interviewagent.vo.ResumeInfoVO;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -33,7 +35,11 @@ public class ResumeInfoServiceImpl extends ServiceImpl<ResumeInfoMapper, ResumeI
         resumeInfo.setWorkExperience(dto.getWorkExperiences());
         resumeInfo.setProject(dto.getProjects());
         resumeInfo.setUserId(userId);
-        return this.save(resumeInfo);
+        try{
+            return this.save(resumeInfo);
+        }catch (DuplicateKeyException e){
+            throw new BusinessException("一个用户只能上传一份简历，请先删除之前上传的简历");
+        }
     }
 
     @Override

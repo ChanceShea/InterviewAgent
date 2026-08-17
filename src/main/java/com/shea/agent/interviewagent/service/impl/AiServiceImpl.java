@@ -133,7 +133,7 @@ public class AiServiceImpl implements AiService {
         String input = request.getQuery();
         String chatId = request.getChatId();
         if (file != null && !file.isEmpty()) {
-            String filePath = FileStorageUtil.saveTempFile(file);
+            String filePath = FileStorageUtil.saveTempFile(file,null,null,-1);
             stateMap.put(CURRENT_PHASE, INTERVIEW_PHASE);
             stateMap.put(INPUT_FILE, filePath);
         } else if (INTERVIEW_PHASE.equals(phase)) {
@@ -177,11 +177,13 @@ public class AiServiceImpl implements AiService {
                 sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                         .data(GraphNodeResponse.humanFeedback("是否将简历持久化到数据库"))
                         .build());
+                sink.tryEmitComplete();
                 return;
             }
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.done(tokens))
                     .build());
+            sink.tryEmitComplete();
         }
     }
 

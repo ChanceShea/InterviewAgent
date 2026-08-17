@@ -37,7 +37,7 @@ public class ResumeInfoController {
             @RequestParam("file") MultipartFile file,
             @RequestParam String chatId
     ) throws IOException {
-        String filePath = FileStorageUtil.saveTempFile(file);
+        String filePath = FileStorageUtil.saveTempFile(file,null,null,-1);
         context.add(RESUME_PREFIX + chatId,filePath);
         return Result.success(filePath);
     }
@@ -52,9 +52,10 @@ public class ResumeInfoController {
     }
 
     @GetMapping("/list")
-    public Result<List<ResumeInfoVO>> listResumeInfo(Long userId) {
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"用户Id不能为空");
+    public Result<List<ResumeInfoVO>> listResumeInfo() {
+        long userId = StpUtil.getLoginIdAsLong();
+        if (userId == 0) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR,"用户未登录");
         }
         return Result.success(resumeInfoService.listResumeInfo(userId));
     }

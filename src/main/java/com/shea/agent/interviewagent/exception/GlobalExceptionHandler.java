@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.postgresql.util.PSQLException;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandler {
         }
     }
 
+    @ExceptionHandler(PSQLException.class)
+    public Result<?> duplicateKeyExceptionHandler(PSQLException e) {
+        log.error("Duplicate key error:", e);
+        return Result.fail(ErrorCode.SYSTEM_ERROR, "一个用户最多只能存储一份简历，请先删除上传过的简历");
+    }
+
     @ExceptionHandler(BusinessException.class)
     public Result<?> businessExceptionHandler(BusinessException e) {
         log.error("Business error:", e);
@@ -50,4 +57,5 @@ public class GlobalExceptionHandler {
         log.error("Runtime error:", e);
         return Result.fail(ErrorCode.SYSTEM_ERROR, e.getMessage());
     }
+
 }

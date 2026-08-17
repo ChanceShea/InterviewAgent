@@ -20,7 +20,11 @@ import java.util.Map;
 public class PromptHelper {
 
     public static String buildParseResumeInfoPrompt() {
-        return PromptConstant.getParseResumeInfoPrompt().render();
+        Map<String,Object> params = new HashMap<>();
+        BeanOutputConverter<ResumeInfoDTO> converter = new BeanOutputConverter<>(ResumeInfoDTO.class);
+        String format = converter.getFormat();
+        params.put("format",format);
+        return PromptConstant.getParseResumeInfoPrompt().render(params);
     }
 
     public static String buildGenerateQuestionPrompt(ResumeInfoDTO resumeInfo, String multiTurn) {

@@ -33,14 +33,15 @@ public class JobController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("chatId") String chatId
     ) throws Exception {
-        InputStream inputStream = file.getInputStream();
-        String result = recognizeGeneralUtil.recognizeByStream(inputStream);
-        JSONObject jsonObject = JSONUtil.parseObj(result);
-        String inner = jsonObject.getJSONObject("body").getStr("data");
-        JSONObject data = JSONUtil.parseObj(inner);
-        String content = data.get("content").toString();
-        context.add(JD_PREFIX + chatId,content);
-        return Result.success(content);
+        try(InputStream inputStream = file.getInputStream()) {
+            String result = recognizeGeneralUtil.recognizeByStream(inputStream);
+            JSONObject jsonObject = JSONUtil.parseObj(result);
+            String inner = jsonObject.getJSONObject("body").getStr("data");
+            JSONObject data = JSONUtil.parseObj(inner);
+            String content = data.get("content").toString();
+            context.add(JD_PREFIX + chatId, content);
+            return Result.success(content);
+        }
     }
 
     @PostMapping("/text")

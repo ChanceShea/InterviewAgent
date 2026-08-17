@@ -44,10 +44,12 @@ public class UserController {
     }
 
     @GetMapping("/get/login")
-    public Result<UserVO> getLoginUser(String uuid) {
-        if (uuid == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"参数不能为空");
+    public Result<UserVO> getLoginUser() {
+        long userId = StpUtil.getLoginIdAsLong();
+        if (userId == 0) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR,"用户未登录");
         }
+        String uuid = StpUtil.getSession().get("user_" + userId).toString();
         return Result.success(userService.getLoginUser(uuid));
     }
 

@@ -35,6 +35,10 @@ spring:
           max-idle: 10
           # 连接池中的最小空闲连接
           min-idle: 0
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
 
 mybatis-plus:
   global-config:
@@ -57,3 +61,4 @@ rag:
 interview-agent:
   checkpoint:
     type: memory
+

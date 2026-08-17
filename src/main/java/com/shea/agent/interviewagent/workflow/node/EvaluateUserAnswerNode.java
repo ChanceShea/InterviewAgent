@@ -43,7 +43,7 @@ public class EvaluateUserAnswerNode implements NodeAction {
         List<AnswerEvaluation> evaluations = StateUtil.getListValue(state, EVALUATIONS, AnswerEvaluation.class, new ArrayList<>());
         String prompt = PromptHelper.buildEvaluateUserAnswerPrompt(info, questions, userAnswer, multiTurn);
         log.info("构建好的prompt：\n {}",prompt);
-        Flux<ChatResponse> flux = streamLlmService.callUser(prompt,AnswerEvaluation.class);
+        Flux<ChatResponse> flux = streamLlmService.callUser(prompt);
         AnswerEvaluation evaluation = flux.mapNotNull(resp -> resp.getResult().getOutput().getText())
                 .collect(StringBuilder::new, StringBuilder::append)
                 .map(StringBuilder::toString)

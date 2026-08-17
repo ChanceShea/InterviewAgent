@@ -90,7 +90,7 @@ public class ParseResumeInfoNode implements NodeAction {
 
         // ---- 子阶段3：LLM解析（定时推送假进度） ----
         String prompt = PromptHelper.buildParseResumeInfoPrompt();
-        Flux<ChatResponse> response = streamLlmService.call(prompt, resumeText, ResumeInfoDTO.class);
+        Flux<ChatResponse> response = streamLlmService.call(prompt, resumeText);
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         AtomicBoolean running = new AtomicBoolean(true);
