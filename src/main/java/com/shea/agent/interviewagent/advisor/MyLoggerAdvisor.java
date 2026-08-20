@@ -56,7 +56,7 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
                 sb.append(content);
             }
         }
-        log.info("AI Response: {}", sb);
+        log.debug("AI Response: {}", sb);
     }
 
     private ChatClientRequest before(ChatClientRequest chatClientRequest) {
@@ -65,7 +65,7 @@ public class MyLoggerAdvisor implements CallAdvisor, StreamAdvisor {
     }
 
     private void observeAfter(ChatClientResponse chatClientResponse) {
-        log.info("AI Response：{}",chatClientResponse.chatResponse().getResult().getOutput().getText());
+        log.debug("AI Response：{}",chatClientResponse.chatResponse().getResult().getOutput().getText());
     }
 
     @Override

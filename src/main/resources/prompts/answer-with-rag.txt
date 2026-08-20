@@ -18,26 +18,13 @@
    - 如果文档信息不足以完整回答问题，需在答案中明确说明局限性，并提供基于知识推理的补充建议。
    - 对于涉及代码、配置、API 接口等技术内容，需以规范的格式（如代码块或引用块）在答案中呈现。
 
-3. **置信度评估与引用标注 (Confidence Assessment & Citation)**:
-   - 根据文档与问题的匹配程度，评估回答的置信度（0-1之间）。
-   - 标注回答中所引用参考文档的ID列表，便于用户溯源。
-
 
 # 输出格式
 你必须严格按照下面的JSON格式输出，不能有任何多余的解释。直接输出JSON字符串，不要使用```json代码块包裹。
 
 \{
   "answer": "string",
-  "citations": ["string"],
-  "confidence": float
 }
-
-
-# 示例
-【参考文档 (Documents)】:
-- ID: "doc_001"，内容: "项目使用 Spring Boot 2.7.x 框架，数据库连接池默认采用 HikariCP，最大连接数配置为 20。"
-- ID: "doc_002"，内容: "在 application.yml 中可通过 spring.datasource.hikari.maximum-pool-size 参数调整连接池大小。"
-- ID: "doc_003"，内容: "若连接数不足，可能出现 'Connection is not available' 异常，建议根据并发量合理配置。"
 
 【多轮输入】
 <最新>用户输入: 项目里数据库连接池最大连接数是多少？怎么修改？
@@ -45,8 +32,6 @@
 # 输出
 \{
   "answer": "根据项目文档，当前数据库连接池采用 HikariCP，默认最大连接数为 20。如需修改，可在 application.yml 配置文件中通过 `spring.datasource.hikari.maximum-pool-size` 参数进行调整。若连接数配置不足，可能会出现 'Connection is not available' 异常，建议根据实际并发量和数据库承载能力合理设置该值。\n\n需要注意的是，调整最大连接数时也应同步关注数据库服务端的连接数上限配置，避免客户端配置超过服务端限制导致连接失败。\n\n如果当前项目的并发预估尚不明确，可以提供具体业务场景，我可以帮你给出更精准的配置建议；或者是否需要同时说明连接超时时间（connection-timeout）等其他相关参数的配置方式？",
-  "citations": ["doc_001", "doc_002", "doc_003"],
-  "confidence": 0.95
 }
 
 # 正式任务

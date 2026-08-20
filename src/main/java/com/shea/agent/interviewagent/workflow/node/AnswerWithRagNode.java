@@ -83,10 +83,7 @@ public class AnswerWithRagNode implements NodeAction {
                     histories.add(message);
                     resultMap.put(FINAL_ANSWER, answerUserQueryDTO.getAnswer());
                     resultMap.put(MULTI_TURN, JSONUtil.toJsonStr(histories));
-                    log.info("相关文档：{}，相关度：{}",
-                            answerUserQueryDTO.getCitations().toString(),
-                            answerUserQueryDTO.getConfidence()
-                    );
+                    log.info("AI生成回复：{}",answerUserQueryDTO.getAnswer());
                     return resultMap;
                 });
         fluxRegistry.addFlux(fluxId, generator);
