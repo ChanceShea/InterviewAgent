@@ -54,6 +54,19 @@ logging:
   level:
     web: info
 
+---
+spring:
+  ai:
+    mcp:
+      client:
+        stdio:
+          connections:
+            context7:
+              command: E:\nodejs\npx.cmd
+              args:
+                - "-y"
+                - "@upstash/context7-mcp"
+        type: SYNC
 rag:
   autoLoad: true
   batchSize: 1
@@ -61,4 +74,5 @@ rag:
 interview-agent:
   checkpoint:
     type: memory
+
 

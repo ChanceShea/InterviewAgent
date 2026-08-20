@@ -23,5 +23,6 @@ public class AgentQueryDTO implements Serializable {
 
     private Double threshold;
 
+    @Builder.Default
     private int topK = 3;
 }

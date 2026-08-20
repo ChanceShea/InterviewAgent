@@ -34,15 +34,16 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
         configurer.setTaskExecutor(asyncTaskExecutor());
-        configurer.setDefaultTimeout(30000);
+        // SSE 流式接口需容忍长时间流（LLM 多节点串行），放宽默认 30s 超时
+        configurer.setDefaultTimeout(120000);
     }
 
     @Bean
     public ThreadPoolTaskExecutor asyncTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10);
-        executor.setMaxPoolSize(50);
-        executor.setQueueCapacity(100);
+        executor.setCorePoolSize(20);
+        executor.setMaxPoolSize(100);
+        executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("Async-");
         executor.initialize();
         return executor;
@@ -51,10 +52,10 @@ public class WebConfig implements WebMvcConfigurer {
     @Bean
     public ExecutorService executorService() {
         return new ThreadPoolExecutor(
-                4, 8, 60, TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(100),
+                16, 32, 60, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(500),
                 new DefaultThreadFactory("Async-Thread-"),
-                new ThreadPoolExecutor.AbortPolicy());
+                new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
 }

@@ -3,10 +3,7 @@ package com.shea.agent.interviewagent.prompt;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.shea.agent.interviewagent.dto.AnswerEvaluation;
-import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
-import com.shea.agent.interviewagent.dto.QueryRewriteDTO;
-import com.shea.agent.interviewagent.dto.ResumeInfoDTO;
+import com.shea.agent.interviewagent.dto.*;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 import java.util.HashMap;
@@ -91,5 +88,11 @@ public class PromptHelper {
         params.put("job_description", jobDescription);
         params.put("resume_info", resumeInfo);
         return PromptConstant.getJobResumeMatchPrompt().render(params);
+    }
+
+    public static String buildExtractLibraryNamePrompt(String question) {
+        Map<String,Object> params = new HashMap<>();
+        params.put("user_question",question);
+        return PromptConstant.getExtractLibraryNamePrompt().render(params);
     }
 }

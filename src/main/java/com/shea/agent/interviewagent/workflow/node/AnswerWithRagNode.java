@@ -1,5 +1,6 @@
 package com.shea.agent.interviewagent.workflow.node;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.cloud.ai.graph.GraphResponse;
 import com.alibaba.cloud.ai.graph.OverAllState;
@@ -11,6 +12,7 @@ import com.shea.agent.interviewagent.entity.HistoryMessage;
 import com.shea.agent.interviewagent.prompt.PromptHelper;
 import com.shea.agent.interviewagent.registry.FluxRegistry;
 import com.shea.agent.interviewagent.service.AgentKnowledgeService;
+import com.shea.agent.interviewagent.service.Context7SearchService;
 import com.shea.agent.interviewagent.service.LlmService;
 import com.shea.agent.interviewagent.utils.FluxUtil;
 import com.shea.agent.interviewagent.utils.StateUtil;
@@ -38,6 +40,7 @@ public class AnswerWithRagNode implements NodeAction {
     private final AgentKnowledgeService agentKnowledgeService;
     private final LlmService streamLlmService;
     private final FluxRegistry fluxRegistry;
+    private final Context7SearchService context7SearchService;
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -66,6 +69,13 @@ public class AnswerWithRagNode implements NodeAction {
         String allDocuments = documents.stream()
                 .map(Document::getText)
                 .collect(Collectors.joining(","));
+        if (StrUtil.isBlank(allDocuments)) {
+            log.info("RAG无相关文档，回退Context7，chatId：{}",chatId);
+            String c7Res = context7SearchService.query(enhancedQuery);
+            if (StrUtil.isNotBlank(c7Res)) {
+                allDocuments = c7Res;
+            }
+        }
         String prompt = PromptHelper.buildAnswerWithRagPrompt(allDocuments, multiTurn, enhancedQuery);
         Flux<ChatResponse> responseFlux = streamLlmService.callUser(prompt);
         Map<String,Object> resultMap = new HashMap<>();

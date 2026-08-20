@@ -45,4 +45,8 @@ public final class PromptConstant {
     public static PromptTemplate getJobResumeMatchPrompt() {
         return new PromptTemplate(PromptLoader.loadPrompt("job-resume-match.txt"));
     }
+
+    public static PromptTemplate getExtractLibraryNamePrompt() {
+        return new PromptTemplate(PromptLoader.loadPrompt("extract-library-name.txt"));
+    }
 }
