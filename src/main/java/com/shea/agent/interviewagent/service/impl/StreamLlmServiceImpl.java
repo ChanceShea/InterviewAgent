@@ -2,6 +2,8 @@ package com.shea.agent.interviewagent.service.impl;
 
 import com.shea.agent.interviewagent.agent.AiAgent;
 import com.shea.agent.interviewagent.service.LlmService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.advisor.StructuredOutputValidationAdvisor;
@@ -23,6 +25,8 @@ public class StreamLlmServiceImpl implements
         LlmService {
 
     private final AiAgent aiAgent;
+    private final RateLimiter rateLimiter;
+    private final CircuitBreaker llmCircuitBreaker;
 
     @Override
     public Flux<ChatResponse> call(String system, String user) {
@@ -73,4 +77,5 @@ public class StreamLlmServiceImpl implements
                 .subscribeOn(Schedulers.boundedElastic())
                 .flux();
     }
+
 }

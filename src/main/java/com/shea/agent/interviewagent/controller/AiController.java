@@ -53,8 +53,11 @@ public class AiController {
         request.setHumanFeedbackContent(feedbackContent);
         // 在 HTTP 线程中提取 userId，此时 Sa-Token 上下文有效
         request.setUserId(StpUtil.getLoginIdAsString());
-        Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = Sinks.many().multicast().onBackpressureBuffer();
-        aiService.chat(sink,request);
+        // 最多接收1024个流
+        Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = Sinks
+                .many()
+                .multicast()
+                .onBackpressureBuffer(1024);
         return sink.asFlux().filter(sse -> {
                     // 1. 如果 event 是 "complete" 或 "error"，直接放行（不管 text 是否为空）
                     if (EVENT_COMPLETE.equals(sse.event()) || EVENT_ERROR.equals(sse.event())) {
@@ -68,7 +71,10 @@ public class AiController {
                     // 判断字符串是否为空
                     return sse.data() != null && sse.data().getContent() != null && !sse.data().getContent().isEmpty();
                 })
-                .doOnSubscribe(subscription -> log.info("Client subscribed to stream, threadId: {}", request.getChatId()))
+                .doOnSubscribe(subscription -> {
+                    log.info("Client subscribed to stream, threadId: {}", request.getChatId());
+                    aiService.chat(sink,request);
+                })
                 .doOnCancel(() -> {
                     log.info("Client disconnected from stream, threadId: {}", request.getChatId());
                     if (request.getChatId() != null) {

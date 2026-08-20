@@ -65,8 +65,8 @@ class SummarizeInterviewNodeTest {
                 .name("张明")
                 .job("高级Java开发工程师")
                 .skills(Arrays.asList("Java", "Spring Boot", "MySQL", "Redis", "Kafka", "Docker", "Kubernetes"))
-                .workExperience(workExperiences)
-                .project(projects)
+                .workExperiences(workExperiences)
+                .projects(projects)
                 .build();
         List<AnswerEvaluation> evaluationList = Arrays.asList(
                 createEvaluation1(),

@@ -10,7 +10,6 @@ import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.shea.agent.interviewagent.context.JobMatchContext;
 import com.shea.agent.interviewagent.context.StreamContext;
-import com.shea.agent.interviewagent.dto.AnswerUserQueryDTO;
 import com.shea.agent.interviewagent.dto.GraphRequest;
 import com.shea.agent.interviewagent.dto.JobResumeMatchDTO;
 import com.shea.agent.interviewagent.exception.BusinessException;
@@ -20,6 +19,7 @@ import com.shea.agent.interviewagent.registry.StreamContextRegistry;
 import com.shea.agent.interviewagent.service.AiService;
 import com.shea.agent.interviewagent.utils.FileStorageUtil;
 import com.shea.agent.interviewagent.utils.JsonUtil;
+import com.shea.agent.interviewagent.utils.LlmConcurrencyGuard;
 import com.shea.agent.interviewagent.utils.StateUtil;
 import com.shea.agent.interviewagent.vo.GraphNodeResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,8 +58,9 @@ public class AiServiceImpl implements AiService {
     private final JobMatchContext jobContext;
     private final StreamContextRegistry contextRegistry;
     private final ExecutorService executor;
-    private final CompileConfig compileConfig;
     private final BaseCheckpointSaver checkpointSaver;
+    private final LlmConcurrencyGuard guard;
+
 
     public AiServiceImpl(
             StateGraph interviewGraph,
@@ -68,6 +70,7 @@ public class AiServiceImpl implements AiService {
             StreamContextRegistry contextRegistry,
             ExecutorService executorService,
             CompileConfig compileConfig,
+            LlmConcurrencyGuard guard,
             BaseCheckpointSaver checkpointSaver
     ) throws GraphStateException {
         this.graph = interviewGraph.compile(compileConfig);
@@ -79,11 +82,11 @@ public class AiServiceImpl implements AiService {
                 ).build();
         this.matchGraph = jobResumeMatchGraph.compile(config);
         this.checkpointSaver = checkpointSaver;
-        this.compileConfig = compileConfig;
         this.registry = registry;
         this.jobContext = context;
         this.contextRegistry = contextRegistry;
         this.executor = executorService;
+        this.guard = guard;
     }
 
     @Override
@@ -98,6 +101,14 @@ public class AiServiceImpl implements AiService {
                     .build();
             StreamContext context = contextRegistry.getOrCreate(chatId);
             context.setSink(sink);
+            if (!guard.tryAcquire()) {
+                log.warn("并发已满，拒绝新流，chatId:{}", chatId);
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.error("系统繁忙，请稍后再试"))
+                        .build());
+                sink.tryEmitComplete();
+                return;
+            }
             context.setChatId(chatId);
             boolean resuming = StrUtil.isNotBlank(request.getHumanFeedbackContent());
             if (resuming) {
@@ -110,6 +121,7 @@ public class AiServiceImpl implements AiService {
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.error(e.getMessage()))
                     .build());
+            sink.tryEmitComplete();
         }
     }
 
@@ -133,7 +145,7 @@ public class AiServiceImpl implements AiService {
         String input = request.getQuery();
         String chatId = request.getChatId();
         if (file != null && !file.isEmpty()) {
-            String filePath = FileStorageUtil.saveTempFile(file,null,null,-1);
+            String filePath = FileStorageUtil.saveTempFile(file, null, null, -1);
             stateMap.put(CURRENT_PHASE, INTERVIEW_PHASE);
             stateMap.put(INPUT_FILE, filePath);
         } else if (INTERVIEW_PHASE.equals(phase)) {
@@ -144,26 +156,34 @@ public class AiServiceImpl implements AiService {
         }
         stateMap.put(CHAT_ID, chatId);
         stateMap.put(USER_ID, request.getUserId());
-        Flux<NodeOutput> nodeOutputFlux = graph.stream(stateMap, config);
+        Flux<NodeOutput> nodeOutputFlux = graph.stream(stateMap, config)
+                .doFinally(sig -> guard.release());
         subscribeToFlux(context, nodeOutputFlux, request);
     }
 
     private void subscribeToFlux(StreamContext context, Flux<NodeOutput> nodeOutputFlux, GraphRequest request) {
         CompletableFuture.runAsync(() -> {
-            Disposable disposable = nodeOutputFlux.subscribe(output -> handleOutput(request, output),
-                    err -> handleError(request, err), () -> handleComplete(request));
-            synchronized (context) {
-                if (context.isCleaned()) {
-                    // 如果已经清理，立即释放刚创建的 Disposable
-                    if (disposable != null && !disposable.isDisposed()) {
-                        disposable.dispose();
+                    Disposable disposable = nodeOutputFlux.subscribe(output -> handleOutput(request, output),
+                            err -> handleError(request, err), () -> handleComplete(request));
+                    synchronized (context) {
+                        if (context.isCleaned()) {
+                            // 如果已经清理，立即释放刚创建的 Disposable
+                            if (disposable != null && !disposable.isDisposed()) {
+                                disposable.dispose();
+                            }
+                        } else {
+                            // 只有在未清理的情况下才设置 Disposable
+                            context.setDisposable(disposable);
+                        }
                     }
-                } else {
-                    // 只有在未清理的情况下才设置 Disposable
-                    context.setDisposable(disposable);
-                }
-            }
-        }, executor);
+                }, executor)
+                .exceptionally(ex -> {
+                    if (ex instanceof RejectedExecutionException || (ex.getCause() instanceof RejectedExecutionException)) {
+                        log.warn("executor队列已满，快速失败，chatId:{}", request.getChatId(), ex);
+                        handleError(request, new BusinessException(ErrorCode.SYSTEM_ERROR, "系统繁忙，请稍后重试"));
+                    }
+                    return null;
+                });
     }
 
     private void handleComplete(GraphRequest request) {
@@ -180,10 +200,12 @@ public class AiServiceImpl implements AiService {
                 sink.tryEmitComplete();
                 return;
             }
-            sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
-                    .data(GraphNodeResponse.done(tokens))
-                    .build());
-            sink.tryEmitComplete();
+            if (context.getInnerDisposable() == null || context.getInnerDisposable().isDisposed()) {
+                sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                        .data(GraphNodeResponse.done(tokens))
+                        .build());
+                sink.tryEmitComplete();
+            }
         }
     }
 
@@ -200,7 +222,7 @@ public class AiServiceImpl implements AiService {
 
     private void handleError(GraphRequest request, Throwable err) {
         String chatId = request.getChatId();
-        log.error("流式输出错误，chatId:{},err:{}", chatId, err.getMessage(),err);
+        log.error("流式输出错误，chatId:{},err:{}", chatId, err.getMessage(), err);
         StreamContext context = contextRegistry.get(chatId);
         Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink = context.getSink();
         if (sink != null && sink.currentSubscriberCount() > 0) {
@@ -249,13 +271,14 @@ public class AiServiceImpl implements AiService {
 
     private void processSummarizeInterviewNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux == null) {
             return;
         }
         StringBuilder sb = new StringBuilder();
         final String[] lastExtracted = {""};
-        flux.subscribe(resp -> {
+        Disposable inner = flux.subscribe(resp -> {
             if (resp.getOutput() == null) {
                 return;
             }
@@ -284,7 +307,7 @@ public class AiServiceImpl implements AiService {
                         .build());
             }
         }, err -> {
-            log.error("流式输出出错，{}", err.getMessage());
+            log.error("流式输出出错，{}", err.getMessage(),err);
             sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                     .data(GraphNodeResponse.error(err.getMessage()))
                     .build());
@@ -293,17 +316,19 @@ public class AiServiceImpl implements AiService {
             log.info("流式输出完成");
             sink.tryEmitComplete();
         });
+        contextRegistry.get(chatId).setInnerDisposable(inner);
     }
 
     private void processAnswerWithRagNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
         String fluxId = StateUtil.getStringValue(output.state(), FLUX_ID);
+        String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux == null) {
             return;
         }
         StringBuilder sb = new StringBuilder();
         final String[] lastExtracted = {""};
-        flux.subscribe(resp -> {
+        Disposable inner = flux.subscribe(resp -> {
             if (resp.getOutput() == null) {
                 return;
             }
@@ -316,14 +341,19 @@ public class AiServiceImpl implements AiService {
                 String currentAnswer = JsonUtil.extractField(fullText, "answer");
                 if (currentAnswer != null && currentAnswer.length() > lastExtracted[0].length()) {
                     String delta = currentAnswer.substring(lastExtracted[0].length());
-                    if (!delta.isEmpty()) {
-                        sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
-                                .data(GraphNodeResponse.token(delta))
-                                .build());
-                        lastExtracted[0] = currentAnswer;
+                    Sinks.EmitResult emitResult = sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
+                            .data(GraphNodeResponse.token(delta))
+                            .build());
+                    if (emitResult.isFailure()) {
+                        log.warn("sink推送失败({})，终止当前流，chatId:{}", emitResult, chatId);
+                        StreamContext context = contextRegistry.get(chatId);
+                        context.cleanup();
+                        return;
                     }
+                    lastExtracted[0] = currentAnswer;
                 }
             } catch (Exception e) {
+                log.error("流式输出错误：{}", e.getMessage(),e);
                 sink.tryEmitNext(ServerSentEvent.<GraphNodeResponse>builder()
                         .data(GraphNodeResponse.error(e.getMessage()))
                         .build());
@@ -337,6 +367,7 @@ public class AiServiceImpl implements AiService {
             log.info("流式输出完成");
             sink.tryEmitComplete();
         });
+        contextRegistry.get(chatId).setInnerDisposable(inner);
     }
 
     private void processGenerateQuestionNode(Sinks.Many<ServerSentEvent<GraphNodeResponse>> sink, StreamingOutput output) {
@@ -344,7 +375,7 @@ public class AiServiceImpl implements AiService {
         String chatId = StateUtil.getStringValue(output.state(), CHAT_ID);
         Flux<GraphResponse<StreamingOutput>> flux = registry.get(fluxId);
         if (flux != null) {
-            flux.subscribe(resp -> {
+            Disposable inner = flux.subscribe(resp -> {
                 try {
                     if (resp.getOutput() == null) {
                         resp.resultValue().ifPresent(value -> {
@@ -386,6 +417,7 @@ public class AiServiceImpl implements AiService {
                 log.info("流式响应完成");
                 sink.tryEmitComplete();
             });
+            contextRegistry.get(chatId).setInnerDisposable(inner);
         }
     }
 
@@ -465,16 +497,6 @@ public class AiServiceImpl implements AiService {
                         .build())
                 .map(Flux::just)
                 .orElseGet(Flux::empty);
-    }
-
-
-    @Deprecated
-    private String extractAnswer(String res) {
-        if (JSONUtil.isTypeJSON(res)) {
-            AnswerUserQueryDTO dto = JSONUtil.toBean(res, AnswerUserQueryDTO.class);
-            return dto.getAnswer();
-        }
-        return res;
     }
 
     @NotNull

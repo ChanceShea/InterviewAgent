@@ -25,6 +25,8 @@ public class StreamContext {
 
     private Disposable disposable;
 
+    private Disposable innerDisposable;
+
     /**
      * 累计token用量
      */
@@ -51,6 +53,15 @@ public class StreamContext {
                 localDisposable.dispose();
             }
             catch (Exception e) {
+                // 忽略清理过程中的异常
+            }
+        }
+
+        Disposable inner = innerDisposable;
+        if (inner != null && !inner.isDisposed()) {
+            try {
+                inner.dispose();
+            } catch (Exception e) {
                 // 忽略清理过程中的异常
             }
         }
